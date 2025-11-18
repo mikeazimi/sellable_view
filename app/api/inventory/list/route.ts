@@ -1,75 +1,117 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from "next/server";
+import { getShipHeroClient, getCustomerAccountId } from "@/lib/shiphero";
+import type { QueryResult, Connection, WarehouseProduct } from "@/lib/shiphero/types";
 
 export async function GET(request: NextRequest) {
   try {
-    // Get auth token from localStorage (client will need to pass this)
-    // For now, we'll check cookies or you can modify to get from header
-    const authToken = request.cookies.get('shiphero_auth_token')?.value
-    
-    if (!authToken) {
-      return NextResponse.json(
-        { error: 'Authentication required. Please set up your token in Settings.' },
-        { status: 401 }
-      )
-    }
+    const searchParams = request.nextUrl.searchParams;
+    const warehouseId = searchParams.get("warehouse_id");
+    const sku = searchParams.get("sku");
+    const customerAccountId = getCustomerAccountId(); // From environment variable
 
-    // ShipHero GraphQL query to get all products with inventory
-    const response = await fetch('https://public-api.shiphero.com/graphql', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`,
-      },
-      body: JSON.stringify({
-        query: `
-          query {
-            products(first: 50) {
-              edges {
-                node {
-                  sku
+    const client = getShipHeroClient();
+
+    // Query warehouse products (inventory) from ShipHero
+    const query = `
+      query GetWarehouseProducts(
+        $warehouse_id: String
+        $sku: String
+        $customer_account_id: String
+        $first: Int
+      ) {
+        warehouse_products(
+          warehouse_id: $warehouse_id
+          sku: $sku
+          customer_account_id: $customer_account_id
+          first: $first
+        ) {
+          request_id
+          complexity
+          data {
+            edges {
+              node {
+                id
+                legacy_id
+                sku
+                warehouse_id
+                warehouse_identifier
+                on_hand
+                available
+                allocated
+                inventory_bin
+                reserve_inventory
+                reorder_level
+                reorder_amount
+                updated_at
+                product {
                   name
-                  inventory {
-                    bin_location
-                    quantity
-                    is_pickable
-                    is_sellable
+                  barcode
+                  dimensions {
+                    weight
+                    height
+                    width
+                    length
                   }
                 }
               }
+              cursor
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
             }
           }
-        `,
-      }),
-    })
+        }
+      }
+    `;
 
-    const data = await response.json()
+    const variables = {
+      warehouse_id: warehouseId || undefined,
+      sku: sku || undefined,
+      customer_account_id: customerAccountId,
+      first: 50,
+    };
 
-    if (data.errors) {
-      console.error('[v0] ShipHero API error:', data.errors)
-      return NextResponse.json(
-        { error: data.errors[0]?.message || 'Failed to fetch inventory' },
-        { status: 400 }
-      )
-    }
+    const response = await client.query<{
+      warehouse_products: QueryResult<Connection<WarehouseProduct & { product: any }>>;
+    }>(query, variables);
 
-    // Transform the data to match our interface
-    const inventoryData = data.data.products.edges.map((edge: any) => ({
-      sku: edge.node.sku,
-      productName: edge.node.name,
-      locations: edge.node.inventory.map((inv: any) => ({
-        binLocation: inv.bin_location,
-        quantity: inv.quantity,
-        isPickable: inv.is_pickable,
-        isSellable: inv.is_sellable,
-      })),
-    }))
+    // Transform ShipHero data to our format
+    const inventoryData = response.warehouse_products.data.edges.map(({ node }) => ({
+      id: node.id,
+      sku: node.sku,
+      name: node.product?.name || node.sku,
+      quantity: node.on_hand,
+      available: node.available,
+      allocated: node.allocated,
+      warehouse: node.warehouse_identifier,
+      location: node.inventory_bin || "Unassigned",
+      lastUpdated: node.updated_at,
+      reorderLevel: node.reorder_level,
+      reorderAmount: node.reorder_amount,
+      barcode: node.product?.barcode,
+      dimensions: node.product?.dimensions,
+    }));
 
-    return NextResponse.json(inventoryData)
-  } catch (error) {
-    console.error('[v0] Error loading inventory:', error)
+    return NextResponse.json({
+      success: true,
+      data: inventoryData,
+      meta: {
+        request_id: response.warehouse_products.request_id,
+        complexity: response.warehouse_products.complexity,
+        hasNextPage: response.warehouse_products.data.pageInfo.hasNextPage,
+        endCursor: response.warehouse_products.data.pageInfo.endCursor,
+      },
+    });
+  } catch (error: any) {
+    console.error("Inventory list error:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        success: false, 
+        error: error.message || "Failed to fetch inventory",
+        type: error.type || 'unknown'
+      },
       { status: 500 }
-    )
+    );
   }
 }
