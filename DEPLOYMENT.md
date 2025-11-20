@@ -33,10 +33,10 @@ This deploys directly to your production URL: https://sellable-view.vercel.app
 
 ## 📋 Your Current Setup
 
-- **GitHub Repository**: https://github.com/mostafa-azimi/sellable_view.git
-- **Vercel Project**: sellable-view
-- **Production URL**: https://sellable-view.vercel.app
-- **Vercel Account**: mikeazimi-dischubcoms-projects
+- **GitHub Repository**: https://github.com/mikeazimi/sellable_view.git
+- **Vercel Project**: sellable-view  
+- **Production URL**: https://sellable-view.vercel.app (mike-azimis-projects)
+- **Vercel Account**: mike-azimis-projects
 
 ## 🔄 Typical Workflow
 
