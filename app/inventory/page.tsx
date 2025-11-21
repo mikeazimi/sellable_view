@@ -30,72 +30,112 @@ interface LocationData {
   totalItems: number
 }
 
+interface WarehouseData {
+  id: string
+  legacyId: number
+  identifier: string
+  name: string
+  address: {
+    name: string
+    city: string
+    state: string
+    country: string
+  }
+}
+
+interface CombinedInventoryData {
+  warehouses: WarehouseData[]
+  locations: LocationData[]
+  locationsByWarehouse: Map<string, LocationData[]>
+}
+
 export default function InventoryPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [loadingProgress, setLoadingProgress] = useState('')
-  const [customerAccountId, setCustomerAccountId] = useState('')
   const [warehouseId, setWarehouseId] = useState('')
-  const [locationsData, setLocationsData] = useState<LocationData[]>([])
+  const [inventoryData, setInventoryData] = useState<CombinedInventoryData | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
   const [loadDuration, setLoadDuration] = useState<number>(0)
   const { toast } = useToast()
 
-  const loadLocations = async () => {
-    if (!customerAccountId.trim()) {
-      toast({
-        title: 'Customer Account ID Required',
-        description: 'Please enter a customer account ID to query locations',
-        variant: 'destructive',
-      })
-      return
-    }
-
+  const loadInventory = async () => {
     setIsLoading(true)
     setHasSearched(true)
     setLoadingProgress('Initializing query...')
-    setLocationsData([]) // Clear previous results
+    setInventoryData(null) // Clear previous results
     
     const startTime = Date.now()
     
     try {
-      const params = new URLSearchParams({
-        customer_account_id: customerAccountId.trim(),
-      })
+      // Load warehouses first
+      setLoadingProgress('Loading warehouses...')
+      const warehousesResponse = await fetch('/api/shiphero/warehouses')
       
+      if (!warehousesResponse.ok) {
+        const error = await warehousesResponse.json()
+        throw new Error(error.error || 'Failed to fetch warehouses')
+      }
+
+      const warehousesResult = await warehousesResponse.json()
+      if (!warehousesResult.success) {
+        throw new Error(warehousesResult.error || 'Failed to fetch warehouses')
+      }
+
+      // Load locations
+      const params = new URLSearchParams()
       if (warehouseId.trim()) {
         params.append('warehouse_id', warehouseId.trim())
       }
 
       setLoadingProgress('Fetching all bin locations (this may take a moment)...')
+      const locationsResponse = await fetch(`/api/shiphero/locations?${params.toString()}`)
 
-      const response = await fetch(`/api/shiphero/locations?${params.toString()}`)
-
-      if (!response.ok) {
-        const error = await response.json()
+      if (!locationsResponse.ok) {
+        const error = await locationsResponse.json()
         throw new Error(error.error || 'Failed to fetch locations')
       }
 
-      const result = await response.json()
+      const locationsResult = await locationsResponse.json()
       
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to fetch locations')
+      if (!locationsResult.success) {
+        throw new Error(locationsResult.error || 'Failed to fetch locations')
       }
+
+      // Group locations by warehouse
+      const locationsByWarehouse = new Map<string, LocationData[]>()
+      locationsResult.data.forEach((location: LocationData) => {
+        const warehouseKey = location.warehouseId
+        if (!locationsByWarehouse.has(warehouseKey)) {
+          locationsByWarehouse.set(warehouseKey, [])
+        }
+        locationsByWarehouse.get(warehouseKey)!.push(location)
+      })
 
       const duration = Date.now() - startTime
       setLoadDuration(duration)
-      setLocationsData(result.data)
+      
+      setInventoryData({
+        warehouses: warehousesResult.data,
+        locations: locationsResult.data,
+        locationsByWarehouse
+      })
       
       toast({
-        title: '✓ Locations loaded successfully',
-        description: `Found ${result.meta.total_locations} locations with ${result.meta.total_skus} SKUs and ${result.meta.total_units} total units (loaded in ${(duration / 1000).toFixed(1)}s)`,
+        title: 'Inventory loaded successfully',
+        description: `Found ${warehousesResult.data.length} warehouses, ${locationsResult.meta.total_locations} locations with ${locationsResult.meta.total_skus} SKUs (loaded in ${(duration / 1000).toFixed(1)}s)`,
       })
     } catch (error: any) {
+      let errorMessage = error.message || 'Failed to load inventory'
+      if (error.message?.includes('Authentication') || error.message?.includes('token')) {
+        errorMessage = 'Please configure authentication in Settings first'
+      }
+      
       toast({
         title: 'Error',
-        description: error.message || 'Failed to load locations. Please check your customer account ID.',
+        description: errorMessage,
         variant: 'destructive',
       })
-      setLocationsData([])
+      setInventoryData(null)
     } finally {
       setIsLoading(false)
       setLoadingProgress('')
@@ -104,7 +144,7 @@ export default function InventoryPage() {
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      loadLocations()
+      loadInventory()
     }
   }
 
@@ -124,37 +164,21 @@ export default function InventoryPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Search className="w-5 h-5" />
-              Query Locations
+              Load Inventory Locations
             </CardTitle>
             <CardDescription>
-              Enter a customer account ID to view their bin locations and inventory
+              View all bin locations and inventory for your authenticated account
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="customer-id">
-                  Customer Account ID <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="customer-id"
-                  placeholder="e.g., Q3VzdG9tZXJBY2NvdW50OjEyMzQ1"
-                  value={customerAccountId}
-                  onChange={(e) => setCustomerAccountId(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  className="font-mono"
-                />
-                <p className="text-xs text-muted-foreground">
-                  UUID format (base64 encoded customer account ID)
-                </p>
-              </div>
               <div className="space-y-2">
                 <Label htmlFor="warehouse-id">
                   Warehouse ID <span className="text-muted-foreground text-xs">(Optional)</span>
                 </Label>
                 <Input
                   id="warehouse-id"
-                  placeholder="Filter by warehouse ID"
+                  placeholder="Filter by specific warehouse"
                   value={warehouseId}
                   onChange={(e) => setWarehouseId(e.target.value)}
                   onKeyPress={handleKeyPress}
@@ -164,16 +188,18 @@ export default function InventoryPage() {
                   Leave empty to query all warehouses
                 </p>
               </div>
+              <div className="flex items-end">
+                <Button 
+                  onClick={loadInventory} 
+                  disabled={isLoading}
+                  size="lg"
+                  className="w-full"
+                >
+                  <Search className="w-4 h-4 mr-2" />
+                  {isLoading ? 'Loading Inventory...' : 'Load All Inventory'}
+                </Button>
+              </div>
             </div>
-            <Button 
-              onClick={loadLocations} 
-              disabled={isLoading || !customerAccountId.trim()}
-              size="lg"
-              className="w-full md:w-auto"
-            >
-              <Search className="w-4 h-4 mr-2" />
-              {isLoading ? 'Loading Locations...' : 'Query Bin Locations'}
-            </Button>
           </CardContent>
         </Card>
 
@@ -183,7 +209,7 @@ export default function InventoryPage() {
             <CardContent className="py-16 text-center">
               <Package className="w-12 h-12 mx-auto mb-4 text-muted-foreground animate-pulse" />
               <p className="text-muted-foreground text-lg mb-2">
-                Loading bin locations...
+                Loading inventory...
               </p>
               {loadingProgress && (
                 <p className="text-sm text-muted-foreground">
@@ -191,55 +217,53 @@ export default function InventoryPage() {
                 </p>
               )}
               <p className="text-xs text-muted-foreground mt-4">
-                Using pagination to fetch all data safely
+                Loading warehouses and locations with pagination
               </p>
             </CardContent>
           </Card>
-        ) : hasSearched && locationsData.length === 0 ? (
+        ) : hasSearched && (!inventoryData || (inventoryData.warehouses.length === 0 && inventoryData.locations.length === 0)) ? (
           <Card className="border-dashed">
             <CardContent className="py-16 text-center">
               <Warehouse className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
               <p className="text-muted-foreground text-lg mb-2">
-                No locations found
+                No inventory found
               </p>
               <p className="text-sm text-muted-foreground">
-                Try a different customer account ID or check if there's inventory in the account
+                Check if there's inventory in your account or verify authentication in Settings
               </p>
             </CardContent>
           </Card>
-        ) : hasSearched ? (
-          <div className="space-y-4">
+        ) : hasSearched && inventoryData ? (
+          <div className="space-y-6">
             {/* Summary Card */}
             <Card className="bg-primary/5 border-primary/20">
               <CardContent className="pt-6">
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
                   <div>
-                    <p className="text-2xl font-bold">{locationsData.length}</p>
-                    <p className="text-sm text-muted-foreground">Total Locations</p>
+                    <p className="text-2xl font-bold">{inventoryData.warehouses.length}</p>
+                    <p className="text-sm text-muted-foreground">Warehouses</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{inventoryData.locations.length}</p>
+                    <p className="text-sm text-muted-foreground">Locations</p>
                   </div>
                   <div>
                     <p className="text-2xl font-bold">
-                      {locationsData.reduce((sum, loc) => sum + loc.products.length, 0)}
+                      {inventoryData.locations.reduce((sum, loc) => sum + loc.products.length, 0)}
                     </p>
                     <p className="text-sm text-muted-foreground">Unique SKUs</p>
                   </div>
                   <div>
                     <p className="text-2xl font-bold">
-                      {locationsData.reduce((sum, loc) => sum + loc.totalItems, 0)}
+                      {inventoryData.locations.reduce((sum, loc) => sum + loc.totalItems, 0)}
                     </p>
                     <p className="text-sm text-muted-foreground">Total Units</p>
                   </div>
                   <div>
                     <p className="text-2xl font-bold">
-                      {locationsData.filter(loc => loc.pickable).length}
+                      {inventoryData.locations.filter(loc => loc.pickable).length}
                     </p>
                     <p className="text-sm text-muted-foreground">Pickable</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">
-                      {locationsData.filter(loc => loc.sellable).length}
-                    </p>
-                    <p className="text-sm text-muted-foreground">Sellable</p>
                   </div>
                 </div>
                 {loadDuration > 0 && (
@@ -250,75 +274,108 @@ export default function InventoryPage() {
               </CardContent>
             </Card>
 
-            {/* Location Cards */}
-            <div className="grid grid-cols-1 gap-4">
-              {locationsData.map((location) => (
-                <Card key={location.locationId} className="overflow-hidden">
-                  <CardHeader className="bg-muted/50 pb-3">
+            {/* Warehouses with Locations */}
+            {inventoryData.warehouses.map((warehouse) => {
+              const warehouseLocations = inventoryData.locationsByWarehouse.get(warehouse.id) || []
+              const totalWarehouseItems = warehouseLocations.reduce((sum, loc) => sum + loc.totalItems, 0)
+              
+              return (
+                <Card key={warehouse.id} className="overflow-hidden">
+                  <CardHeader className="bg-blue-50 dark:bg-blue-950/20 border-b">
                     <div className="flex items-start justify-between">
                       <div>
-                        <CardTitle className="flex items-center gap-2 text-xl">
-                          <MapPin className="w-5 h-5" />
-                          {location.locationName}
+                        <CardTitle className="flex items-center gap-3 text-2xl">
+                          <Warehouse className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                          {warehouse.identifier}
                         </CardTitle>
-                        <CardDescription className="mt-1">
-                          Zone: {location.zone} • {location.products.length} SKU(s) • {location.totalItems} units
+                        <CardDescription className="mt-1 text-base">
+                          {warehouse.address.name} • {warehouse.address.city}, {warehouse.address.state}
                         </CardDescription>
-                      </div>
-                      <div className="flex gap-2">
-                        <Badge variant={location.pickable ? 'default' : 'secondary'}>
-                          {location.pickable ? '✓ Pickable' : '✗ Not Pickable'}
-                        </Badge>
-                        <Badge variant={location.sellable ? 'default' : 'secondary'}>
-                          {location.sellable ? '✓ Sellable' : '✗ Not Sellable'}
-                        </Badge>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {warehouseLocations.length} locations • {totalWarehouseItems} total units
+                        </p>
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="pt-4">
-                    <div className="space-y-2">
-                      {location.products.map((product, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/30 transition-colors"
-                        >
-                          <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                              <p className="text-xs text-muted-foreground mb-1">SKU</p>
-                              <p className="font-mono font-semibold">{product.sku}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground mb-1">Product Name</p>
-                              <p className="font-medium">{product.productName}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground mb-1">Quantity</p>
-                              <p className="font-semibold text-lg">{product.quantity}</p>
-                            </div>
-                          </div>
-                          {product.barcode && (
-                            <div className="ml-4">
-                              <p className="text-xs text-muted-foreground mb-1">Barcode</p>
-                              <p className="font-mono text-sm">{product.barcode}</p>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                  <CardContent className="pt-6">
+                    {warehouseLocations.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-8">
+                        No locations with inventory in this warehouse
+                      </p>
+                    ) : (
+                      <div className="space-y-4">
+                        {warehouseLocations.map((location) => (
+                          <Card key={location.locationId} className="border-gray-200 dark:border-gray-700">
+                            <CardHeader className="pb-3">
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <CardTitle className="flex items-center gap-2 text-lg">
+                                    <MapPin className="w-4 h-4" />
+                                    {location.locationName}
+                                  </CardTitle>
+                                  <CardDescription>
+                                    Zone: {location.zone} • {location.products.length} SKU(s) • {location.totalItems} units
+                                  </CardDescription>
+                                </div>
+                                <div className="flex gap-2">
+                                  <Badge variant={location.pickable ? 'default' : 'secondary'} className="text-xs">
+                                    {location.pickable ? '✓ Pickable' : '✗ Not Pickable'}
+                                  </Badge>
+                                  <Badge variant={location.sellable ? 'default' : 'secondary'} className="text-xs">
+                                    {location.sellable ? '✓ Sellable' : '✗ Not Sellable'}
+                                  </Badge>
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="pt-2">
+                              <div className="space-y-2">
+                                {location.products.map((product, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="flex items-center justify-between p-3 rounded-lg border bg-gray-50 dark:bg-gray-800/50"
+                                  >
+                                    <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                      <div>
+                                        <p className="text-xs text-muted-foreground mb-1">SKU</p>
+                                        <p className="font-mono font-semibold">{product.sku}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-xs text-muted-foreground mb-1">Product Name</p>
+                                        <p className="font-medium">{product.productName}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-xs text-muted-foreground mb-1">Quantity</p>
+                                        <p className="font-semibold text-lg">{product.quantity}</p>
+                                      </div>
+                                    </div>
+                                    {product.barcode && (
+                                      <div className="ml-4">
+                                        <p className="text-xs text-muted-foreground mb-1">Barcode</p>
+                                        <p className="font-mono text-sm">{product.barcode}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
-              ))}
-            </div>
+              )
+            })}
           </div>
         ) : (
           <Card className="border-dashed">
             <CardContent className="py-16 text-center">
               <Search className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
               <p className="text-muted-foreground text-lg mb-2">
-                Enter a Customer Account ID to get started
+                Ready to load inventory locations
               </p>
               <p className="text-sm text-muted-foreground">
-                You can find customer account IDs in your ShipHero dashboard
+                Click "Load All Inventory" to view warehouses and bin locations
               </p>
             </CardContent>
           </Card>

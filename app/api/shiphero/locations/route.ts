@@ -159,20 +159,12 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const warehouseId = searchParams.get("warehouse_id");
-    const customerAccountId = searchParams.get("customer_account_id");
     const sku = searchParams.get("sku");
     const pickableOnly = searchParams.get("pickable") === "true";
     const sellableOnly = searchParams.get("sellable") === "true";
 
-    if (!customerAccountId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "customer_account_id is required for 3PL operations",
-        },
-        { status: 400 }
-      );
-    }
+    // Get customer account ID from environment (configured via authentication)
+    const customerAccountId = process.env.SHIPHERO_CUSTOMER_ACCOUNT_ID;
 
     const client = getShipHeroClient();
 
@@ -229,7 +221,7 @@ export async function GET(request: NextRequest) {
         total_skus: locationsData.reduce((sum, loc) => sum + loc.products.length, 0),
         total_units: locationsData.reduce((sum, loc) => sum + loc.totalItems, 0),
         fetch_duration_ms: fetchDuration,
-        customer_account_id: customerAccountId,
+        customer_account_id: customerAccountId || 'All customers',
       },
     });
   } catch (error: any) {
