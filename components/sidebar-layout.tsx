@@ -8,21 +8,13 @@ import { Card } from '@/components/ui/card'
 import { 
   Package, 
   Settings, 
-  LogIn, 
   Menu, 
   X,
-  ChevronRight,
-  Home
+  ChevronRight
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navigation = [
-  {
-    name: 'Dashboard',
-    href: '/',
-    icon: Home,
-    description: 'Overview and summary'
-  },
   {
     name: 'Inventory',
     href: '/inventory',
@@ -30,16 +22,10 @@ const navigation = [
     description: 'Bin locations and stock levels'
   },
   {
-    name: 'Authentication',
-    href: '/login',
-    icon: LogIn,
-    description: 'ShipHero API setup'
-  },
-  {
     name: 'Settings',
     href: '/settings',
     icon: Settings,
-    description: 'API token management'
+    description: 'Authentication and configuration'
   }
 ]
 
@@ -77,7 +63,7 @@ export function SidebarLayout({ children }: SidebarLayoutProps) {
                 Sellable View
               </h1>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                3PL Inventory System
+                Inventory Management
               </p>
             </div>
           </div>
@@ -139,9 +125,9 @@ export function SidebarLayout({ children }: SidebarLayoutProps) {
                 <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
                   <Package className="w-3 h-3 text-white" />
                 </div>
-                <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                  ShipHero 3PL
-                </span>
+              <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                ShipHero API
+              </span>
               </div>
               <p className="text-xs text-blue-700 dark:text-blue-300">
                 Connected via API

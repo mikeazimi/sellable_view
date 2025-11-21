@@ -112,10 +112,10 @@ export default function InventoryPage() {
     <div className="p-6">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          Bin Location Inventory
+          Inventory
         </h1>
         <p className="text-gray-600 dark:text-gray-400">
-          View all bin locations with their inventory, including SKUs, quantities, and status
+          Query bin locations by customer account ID
         </p>
       </div>
 
@@ -318,7 +318,7 @@ export default function InventoryPage() {
                 Enter a Customer Account ID to get started
               </p>
               <p className="text-sm text-muted-foreground">
-                You can find customer account IDs in your ShipHero 3PL dashboard
+                You can find customer account IDs in your ShipHero dashboard
               </p>
             </CardContent>
           </Card>
