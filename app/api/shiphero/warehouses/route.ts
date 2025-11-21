@@ -8,17 +8,31 @@ import type { QueryResult, Warehouse } from "@/lib/shiphero/types";
  */
 export async function GET(request: NextRequest) {
   try {
+    // Check environment variable first
+    const refreshToken = process.env.SHIPHERO_REFRESH_TOKEN;
+    if (!refreshToken) {
+      console.error('SHIPHERO_REFRESH_TOKEN not set in environment');
+      return NextResponse.json({
+        success: false,
+        error: "SHIPHERO_REFRESH_TOKEN environment variable not set",
+        hint: "Add the refresh token to your Vercel environment variables"
+      }, { status: 500 });
+    }
+
     const customerAccountId = getCustomerAccountId();
     const client = getShipHeroClient();
 
+    console.log('Fetching warehouses...');
+    console.log('Refresh token configured:', refreshToken.substring(0, 10) + '...');
+    console.log('Customer account ID:', customerAccountId || 'Not set');
+
+    // Simplified warehouses query - exact match to ShipHero docs
     const query = `
       query GetWarehouses {
         account {
           request_id
           complexity
           data {
-            id
-            legacy_id
             warehouses {
               id
               legacy_id
@@ -26,15 +40,10 @@ export async function GET(request: NextRequest) {
               address {
                 name
                 address1
-                address2
                 city
                 state
                 country
                 zip
-                phone
-              }
-              profile {
-                name
               }
             }
           }
@@ -44,11 +53,11 @@ export async function GET(request: NextRequest) {
 
     const response = await client.query<{
       account: QueryResult<{
-        id: string;
-        legacy_id: number;
         warehouses: Warehouse[];
       }>;
     }>(query, {}, customerAccountId);
+
+    console.log('Warehouses fetched successfully:', response.account.data.warehouses.length);
 
     return NextResponse.json({
       success: true,
@@ -56,16 +65,33 @@ export async function GET(request: NextRequest) {
       meta: {
         request_id: response.account.request_id,
         complexity: response.account.complexity,
-        account_id: response.account.data.id,
+        customer_account_id: customerAccountId || 'All customers'
       },
     });
   } catch (error: any) {
     console.error("Warehouses fetch error:", error);
+    
+    // More detailed error handling
+    let errorMessage = error.message || "Failed to fetch warehouses";
+    let hint = "Check your ShipHero API credentials";
+    
+    if (error.message?.includes('token') || error.message?.includes('Authentication')) {
+      errorMessage = "Authentication failed";
+      hint = "Check your SHIPHERO_REFRESH_TOKEN environment variable";
+    } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+      hint = "Check network connectivity to ShipHero API";
+    }
+    
     return NextResponse.json(
       {
         success: false,
-        error: error.message || "Failed to fetch warehouses",
-        type: error.type || 'unknown'
+        error: errorMessage,
+        type: error.type || 'unknown',
+        hint: hint,
+        debug: {
+          refresh_token_set: !!process.env.SHIPHERO_REFRESH_TOKEN,
+          customer_account_id: process.env.SHIPHERO_CUSTOMER_ACCOUNT_ID || 'Not set'
+        }
       },
       { status: 500 }
     );
