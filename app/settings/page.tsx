@@ -10,7 +10,7 @@ import { Copy, Check, Key, Zap, X } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
 // Dev test token for development
-const DEV_TEST_TOKEN = 'dYbj7j9dspqoxwAtW5S2TOBNacIYvv7BKFwQqbArw7mv-'
+const DEV_TEST_TOKEN = 'LZVjD4jZb1qURJt2fsYetTOsHAAxkOv-y1zVpMdYu2txi'
 
 export default function SettingsPage() {
   const [refreshToken, setRefreshToken] = useState('')
