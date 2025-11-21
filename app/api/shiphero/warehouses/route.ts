@@ -59,7 +59,10 @@ export async function GET(request: NextRequest) {
 
     const variables = customerAccountId ? { customer_account_id: customerAccountId } : {};
 
-    console.log('Fetching warehouses with client token:', accessToken.substring(0, 20) + '...');
+    console.log('📤 Sending query to ShipHero...')
+    console.log('Variables:', JSON.stringify(variables, null, 2))
+    
+    const requestBody = { query, variables }
 
     const response = await fetch('https://public-api.shiphero.com/graphql', {
       method: 'POST',
@@ -67,19 +70,28 @@ export async function GET(request: NextRequest) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`
       },
-      body: JSON.stringify({ query, variables })
+      body: JSON.stringify(requestBody)
     });
 
-    console.log('ShipHero API response status:', response.status);
+    console.log('📥 ShipHero response status:', response.status);
+    
+    const responseText = await response.text();
+    console.log('Raw response:', responseText.substring(0, 500));
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('ShipHero API error:', errorText);
-      throw new Error(`ShipHero API error ${response.status}: ${response.statusText}`);
+      console.error('❌ HTTP Error:', response.status, response.statusText);
+      console.error('Response body:', responseText);
+      return NextResponse.json({
+        success: false,
+        error: `ShipHero API HTTP ${response.status}`,
+        details: responseText.substring(0, 200)
+      }, { status: 500 });
     }
 
-    const result = await response.json();
-    console.log('Raw ShipHero response:', JSON.stringify(result, null, 2));
+    let result
+    try {
+      result = JSON.parse(responseText);
+      console.log('✅ Parsed response:', JSON.stringify(result, null, 2));
     
     if (result.errors) {
       console.error('GraphQL errors:', result.errors);
