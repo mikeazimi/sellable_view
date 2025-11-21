@@ -21,6 +21,7 @@ interface FlatInventoryItem {
 
 export default function InventoryPage() {
   const [isLoading, setIsLoading] = useState(false)
+  const [loadingProgress, setLoadingProgress] = useState('')
   const [flatInventory, setFlatInventory] = useState<FlatInventoryItem[]>([])
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const { toast } = useToast()
