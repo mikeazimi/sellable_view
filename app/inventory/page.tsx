@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Package, MapPin, Warehouse, Download, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { Package, Download, ArrowUpDown, ArrowUp, ArrowDown, RefreshCw } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
 interface LocationProduct {
@@ -254,12 +254,22 @@ export default function InventoryPage() {
             {flatInventory.length > 0 && `${flatInventory.length} items across all warehouses`}
           </p>
         </div>
-        {flatInventory.length > 0 && (
-          <Button onClick={exportToCSV} variant="outline">
-            <Download className="w-4 h-4 mr-2" />
-            Export CSV
+        <div className="flex gap-2">
+          {flatInventory.length > 0 && (
+            <Button onClick={exportToCSV} variant="outline">
+              <Download className="w-4 h-4 mr-2" />
+              Export CSV
+            </Button>
+          )}
+          <Button 
+            onClick={loadInventory} 
+            disabled={isLoading}
+            variant="outline"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            {isLoading ? 'Refreshing...' : 'Refresh Data'}
           </Button>
-        )}
+        </div>
       </div>
 
       {isLoading ? (

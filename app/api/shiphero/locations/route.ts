@@ -44,34 +44,32 @@ function decodeLocationName(name: string): string {
 }
 
 /**
- * Fetch all locations with pagination
+ * Fetch all warehouse products with pagination
+ * More efficient than locations query according to ShipHero docs
  */
-async function fetchAllLocations(
+async function fetchAllWarehouseProducts(
   client: any,
   variables: any,
-  customerAccountId: string
-): Promise<LocationNode[]> {
-  const allLocations: LocationNode[] = [];
+  customerAccountId?: string
+): Promise<any[]> {
+  const allProducts: any[] = [];
   let hasNextPage = true;
   let afterCursor: string | undefined = undefined;
   let pageCount = 0;
   const maxPages = 100; // Safety limit to prevent infinite loops
 
   const query = `
-    query GetLocations(
+    query GetWarehouseProducts(
       $warehouse_id: String
       $sku: String
-      $pickable: Boolean
-      $sellable: Boolean
       $customer_account_id: String
       $first: Int
       $after: String
     ) {
-      locations(
+      warehouse_products(
         warehouse_id: $warehouse_id
         sku: $sku
-        pickable: $pickable
-        sellable: $sellable
+        customer_account_id: $customer_account_id
         first: $first
         after: $after
       ) {
@@ -82,22 +80,21 @@ async function fetchAllLocations(
             node {
               id
               legacy_id
-              name
-              zone
-              pickable
-              sellable
+              sku
               warehouse_id
-              products(customer_account_id: $customer_account_id) {
-                edges {
-                  node {
-                    sku
-                    quantity
-                    product {
-                      name
-                      barcode
-                    }
-                  }
-                }
+              warehouse_identifier
+              on_hand
+              inventory_bin
+              active
+              product {
+                name
+                barcode
+              }
+              locations {
+                location_id
+                location_name
+                quantity
+                pickable
               }
             }
             cursor
@@ -111,14 +108,14 @@ async function fetchAllLocations(
     }
   `;
 
-  console.log(`Starting paginated fetch for customer: ${customerAccountId}`);
+  console.log(`Starting paginated warehouse products fetch${customerAccountId ? ' for customer: ' + customerAccountId : ''}`);
 
   while (hasNextPage && pageCount < maxPages) {
     pageCount++;
     
     const pageVariables = {
       ...variables,
-      first: 50, // Fetch 50 locations per page
+      first: 50, // Fetch 50 products per page
       after: afterCursor,
       customer_account_id: customerAccountId,
     };
@@ -126,19 +123,19 @@ async function fetchAllLocations(
     console.log(`Fetching page ${pageCount}${afterCursor ? ` (cursor: ${afterCursor.substring(0, 20)}...)` : ''}`);
 
     const response = await client.query<{
-      locations: QueryResult<Connection<LocationNode>>;
+      warehouse_products: QueryResult<Connection<any>>;
     }>(query, pageVariables);
 
-    const edges = response.locations.data.edges;
-    const locations = edges.map(({ node }) => node);
+    const edges = response.warehouse_products.data.edges;
+    const products = edges.map(({ node }) => node);
     
-    allLocations.push(...locations);
+    allProducts.push(...products);
 
-    hasNextPage = response.locations.data.pageInfo.hasNextPage;
-    afterCursor = response.locations.data.pageInfo.endCursor;
+    hasNextPage = response.warehouse_products.data.pageInfo.hasNextPage;
+    afterCursor = response.warehouse_products.data.pageInfo.endCursor;
 
-    console.log(`Page ${pageCount}: Fetched ${edges.length} locations (Total so far: ${allLocations.length}, hasNextPage: ${hasNextPage})`);
-    console.log(`Complexity: ${response.locations.complexity}`);
+    console.log(`Page ${pageCount}: Fetched ${edges.length} products (Total so far: ${allProducts.length}, hasNextPage: ${hasNextPage})`);
+    console.log(`Complexity: ${response.warehouse_products.complexity}`);
 
     // Small delay between pages to be respectful to the API
     if (hasNextPage) {
@@ -146,22 +143,20 @@ async function fetchAllLocations(
     }
   }
 
-  console.log(`Pagination complete: ${pageCount} pages, ${allLocations.length} total locations`);
+  console.log(`Pagination complete: ${pageCount} pages, ${allProducts.length} total products`);
 
-  return allLocations;
+  return allProducts;
 }
 
 /**
  * GET /api/shiphero/locations
- * Get all bin locations with inventory details (with pagination)
+ * Get all inventory data efficiently using warehouse_products query (per ShipHero docs)
  */
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const warehouseId = searchParams.get("warehouse_id");
     const sku = searchParams.get("sku");
-    const pickableOnly = searchParams.get("pickable") === "true";
-    const sellableOnly = searchParams.get("sellable") === "true";
 
     // Get customer account ID from environment (configured via authentication)
     const customerAccountId = process.env.SHIPHERO_CUSTOMER_ACCOUNT_ID;
@@ -171,57 +166,91 @@ export async function GET(request: NextRequest) {
     const variables = {
       warehouse_id: warehouseId || undefined,
       sku: sku || undefined,
-      pickable: pickableOnly || undefined,
-      sellable: sellableOnly || undefined,
+      active: true, // Only get active products
     };
 
-    // Fetch all pages
+    // Fetch all pages using warehouse_products query (more efficient per docs)
     const startTime = Date.now();
-    const allLocations = await fetchAllLocations(client, variables, customerAccountId);
+    const allWarehouseProducts = await fetchAllWarehouseProducts(client, variables, customerAccountId);
     const fetchDuration = Date.now() - startTime;
 
-    // Transform and flatten the data
-    const locationsData = allLocations
-      .map((node) => {
-        // Get all products in this location
-        const products = node.products.edges.map(({ node: productNode }) => ({
-          sku: productNode.sku,
-          productName: productNode.product.name,
-          quantity: productNode.quantity,
-          barcode: productNode.product.barcode,
-        }));
+    // Transform warehouse products into location-based data
+    const locationsData: any[] = [];
+    const locationMap = new Map<string, any>();
 
-        // Only return locations that have products
-        if (products.length === 0) {
-          return null;
+    allWarehouseProducts.forEach((product) => {
+      if (product.locations && product.locations.length > 0) {
+        // Product has specific location data (dynamic slotting)
+        product.locations.forEach((location: any) => {
+          const locationKey = `${product.warehouse_id}-${location.location_id}`;
+          
+          if (!locationMap.has(locationKey)) {
+            locationMap.set(locationKey, {
+              locationId: location.location_id,
+              locationName: decodeLocationName(location.location_name),
+              locationNameRaw: location.location_name,
+              zone: location.location_name.split('-')[0] || 'Unknown', // Infer zone from location
+              pickable: location.pickable,
+              sellable: true, // Assume sellable if in locations
+              warehouseId: product.warehouse_id,
+              products: [],
+              totalItems: 0,
+            });
+          }
+
+          const loc = locationMap.get(locationKey);
+          loc.products.push({
+            sku: product.sku,
+            productName: product.product?.name || product.sku,
+            quantity: location.quantity,
+            barcode: product.product?.barcode,
+          });
+          loc.totalItems += location.quantity;
+        });
+      } else if (product.inventory_bin && product.on_hand > 0) {
+        // Product in traditional bin (static slotting)
+        const locationKey = `${product.warehouse_id}-${product.inventory_bin}`;
+        
+        if (!locationMap.has(locationKey)) {
+          locationMap.set(locationKey, {
+            locationId: product.inventory_bin,
+            locationName: decodeLocationName(product.inventory_bin),
+            locationNameRaw: product.inventory_bin,
+            zone: product.inventory_bin.split('-')[0] || 'Unknown',
+            pickable: true, // Assume pickable if in inventory bin
+            sellable: product.active !== false,
+            warehouseId: product.warehouse_id,
+            products: [],
+            totalItems: 0,
+          });
         }
 
-        return {
-          locationId: node.id,
-          legacyId: node.legacy_id,
-          locationName: decodeLocationName(node.name),
-          locationNameRaw: node.name,
-          zone: node.zone,
-          pickable: node.pickable,
-          sellable: node.sellable,
-          warehouseId: node.warehouse_id,
-          products: products,
-          totalItems: products.reduce((sum, p) => sum + p.quantity, 0),
-        };
-      })
-      .filter((loc): loc is NonNullable<typeof loc> => loc !== null);
+        const loc = locationMap.get(locationKey);
+        loc.products.push({
+          sku: product.sku,
+          productName: product.product?.name || product.sku,
+          quantity: product.on_hand,
+          barcode: product.product?.barcode,
+        });
+        loc.totalItems += product.on_hand;
+      }
+    });
 
-    console.log(`Returning ${locationsData.length} locations with inventory (took ${fetchDuration}ms)`);
+    const locationsArray = Array.from(locationMap.values())
+      .filter(loc => loc.products.length > 0);
+
+    console.log(`Returning ${locationsArray.length} locations with inventory (took ${fetchDuration}ms)`);
 
     return NextResponse.json({
       success: true,
-      data: locationsData,
+      data: locationsArray,
       meta: {
-        total_locations: locationsData.length,
-        total_skus: locationsData.reduce((sum, loc) => sum + loc.products.length, 0),
-        total_units: locationsData.reduce((sum, loc) => sum + loc.totalItems, 0),
+        total_locations: locationsArray.length,
+        total_skus: locationsArray.reduce((sum: number, loc: any) => sum + loc.products.length, 0),
+        total_units: locationsArray.reduce((sum: number, loc: any) => sum + loc.totalItems, 0),
         fetch_duration_ms: fetchDuration,
         customer_account_id: customerAccountId || 'All customers',
+        query_method: 'warehouse_products (per ShipHero docs)',
       },
     });
   } catch (error: any) {
