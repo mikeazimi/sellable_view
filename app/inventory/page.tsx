@@ -48,96 +48,61 @@ export default function InventoryPage() {
     setIsLoading(true)
     
     try {
-      console.log('🚀 Making DIRECT ShipHero API call...')
+      console.log('🚀 Loading inventory via SERVER endpoint with client token...')
+      console.log('Token:', accessToken.substring(0, 20) + '...')
       
-      // DIRECT call to ShipHero API - NO server middleman
-      const response = await fetch('https://public-api.shiphero.com/graphql', {
-        method: 'POST',
+      // Call OUR server endpoint with Authorization header containing client's token
+      const response = await fetch('/api/shiphero/warehouses', {
+        method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`
-        },
-        body: JSON.stringify({
-          query: `
-            query GetAllInventory {
-              warehouse_products(first: 250) {
-                request_id
-                complexity
-                data {
-                  edges {
-                    node {
-                      sku
-                      warehouse_identifier
-                      inventory_bin
-                      on_hand
-                      active
-                      product {
-                        name
-                        barcode
-                      }
-                    }
-                  }
-                  pageInfo {
-                    hasNextPage
-                    endCursor
-                  }
-                }
-              }
-            }
-          `
-        })
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
       })
 
-      console.log('✅ ShipHero responded:', response.status)
+      console.log('✅ Server responded:', response.status)
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error('❌ API Error:', errorText)
+        const errorData = await response.json()
+        console.error('❌ Server error:', errorData)
         
         if (response.status === 401) {
           AuthManager.clearAuth()
           setIsAuthenticated(false)
-          throw new Error('Token expired - please re-authenticate in Settings')
+          throw new Error('Authentication expired - please re-authenticate in Settings')
         }
         
-        throw new Error(`API error ${response.status}`)
+        throw new Error(errorData.error || `Server error ${response.status}`)
       }
 
       const result = await response.json()
-      console.log('📦 Data received:', result.data?.warehouse_products?.data?.edges?.length || 0, 'products')
+      console.log('📦 Warehouses received:', result.data?.length || 0)
 
-      if (result.errors) {
-        console.error('❌ GraphQL errors:', result.errors)
-        throw new Error(result.errors[0].message)
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to load warehouses')
       }
 
-      if (!result.data?.warehouse_products?.data?.edges) {
-        throw new Error('No data returned from ShipHero')
-      }
+      // For now, just show warehouse data to verify it works
+      const warehouseData: FlatInventoryItem[] = result.data.map((warehouse: any) => ({
+        warehouse: warehouse.identifier,
+        location: warehouse.address?.city || 'N/A',
+        zone: warehouse.address?.state || 'N/A',
+        pickable: true,
+        sellable: true,
+        sku: `WAREHOUSE-${warehouse.legacy_id}`,
+        productName: warehouse.address?.name || 'Warehouse',
+        quantity: 0,
+        barcode: undefined,
+      }))
 
-      // Transform to flat table data
-      const flatData: FlatInventoryItem[] = result.data.warehouse_products.data.edges
-        .map(({ node }: any) => ({
-          warehouse: node.warehouse_identifier || 'Unknown',
-          location: node.inventory_bin || 'Unassigned',
-          zone: (node.inventory_bin || 'U').split('-')[0],
-          pickable: node.active !== false,
-          sellable: node.active !== false,
-          sku: node.sku,
-          productName: node.product?.name || node.sku,
-          quantity: node.on_hand,
-          barcode: node.product?.barcode,
-        }))
-        .filter((item: FlatInventoryItem) => item.quantity > 0)
-
-      setFlatInventory(flatData)
+      setFlatInventory(warehouseData)
       
       toast({
-        title: 'Inventory loaded',
-        description: `${flatData.length} items loaded`,
+        title: 'Warehouses loaded',
+        description: `${warehouseData.length} warehouses loaded successfully`,
       })
 
-      console.log('🎉 SUCCESS! Loaded', flatData.length, 'items')
+      console.log('🎉 SUCCESS! Loaded', warehouseData.length, 'warehouses')
 
     } catch (error: any) {
       console.error('💥 Error:', error)

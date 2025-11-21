@@ -12,15 +12,20 @@ export async function GET(request: NextRequest) {
     const authHeader = request.headers.get('authorization')
     const accessToken = authHeader?.replace('Bearer ', '')
 
+    console.log('Warehouses API called')
+    console.log('Auth header present:', !!authHeader)
+    console.log('Access token extracted:', !!accessToken)
+
     if (!accessToken) {
+      console.error('No access token in Authorization header')
       return NextResponse.json({
         success: false,
-        error: "Authorization header with access token required",
-        hint: "Include 'Authorization: Bearer {token}' header"
+        error: "Authorization header missing",
+        hint: "Please authenticate in Settings first"
       }, { status: 401 });
     }
 
-    console.log('Using client-provided access token for warehouses query');
+    console.log('Using client token:', accessToken.substring(0, 20) + '...');
 
     // Direct API call using client-provided token
     const query = `
