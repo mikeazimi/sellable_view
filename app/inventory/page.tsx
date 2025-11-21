@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Package, Download, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { AuthManager } from '@/lib/auth-manager'
+import { CustomerManager } from '@/lib/customer-manager'
 
 interface FlatInventoryItem {
   warehouse: string
