@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const customerAccountId = searchParams.get("customer_account_id")
 
-    console.log('=== INVENTORY API ===')
+    console.log('=== INVENTORY API (Dynamic Slotting) ===')
     console.log('Customer ID:', customerAccountId)
 
     if (!accessToken) {
@@ -18,10 +18,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: "customer_account_id required" }, { status: 400 });
     }
 
-    // Query locations with products for dynamic slotting - per ShipHero docs
+    // Correct query structure per ShipHero docs for dynamic slotting
+    // locations query returns locations, products field on Location is a connection
     const query = `
-      query GetLocations($customer_account_id: String) {
-        locations(warehouse_id: null) {
+      query GetInventoryLocations($customer_account_id: String) {
+        locations {
           request_id
           complexity
           data {
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest) {
 
     const variables = { customer_account_id: customerAccountId }
 
-    console.log('📤 Querying locations with customer filter')
+    console.log('📤 Query locations with products for customer:', customerAccountId)
 
     const response = await fetch('https://public-api.shiphero.com/graphql', {
       method: 'POST',
@@ -65,22 +66,22 @@ export async function GET(request: NextRequest) {
       body: JSON.stringify({ query, variables })
     });
 
-    console.log('📥 Status:', response.status)
+    console.log('📥 ShipHero response:', response.status)
 
     if (!response.ok) {
       const text = await response.text()
-      console.error('HTTP error:', text.substring(0, 300))
+      console.error('❌ HTTP error:', text.substring(0, 500))
       return NextResponse.json({ 
         success: false, 
         error: `HTTP ${response.status}`,
-        details: text.substring(0, 300)
+        details: text.substring(0, 500)
       }, { status: 500 });
     }
 
     const result = await response.json()
 
     if (result.errors) {
-      console.error('GraphQL errors:', JSON.stringify(result.errors))
+      console.error('❌ GraphQL errors:', JSON.stringify(result.errors))
       return NextResponse.json({ 
         success: false, 
         error: result.errors[0].message,
@@ -89,9 +90,9 @@ export async function GET(request: NextRequest) {
     }
 
     const locations = result.data?.locations?.data?.edges?.map(({ node }: any) => node) || []
-    console.log(`✅ Locations: ${locations.length}`)
+    console.log(`✅ Locations fetched: ${locations.length}`)
 
-    // Get warehouse IDs to names mapping
+    // Get warehouse mapping
     const warehouseQuery = `
       query {
         account {
@@ -123,13 +124,13 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Transform to flat items
+    // Transform locations with products to flat inventory items
     const items: any[] = []
 
     locations.forEach((location: any) => {
-      const products = location.products?.edges || []
+      const productEdges = location.products?.edges || []
       
-      products.forEach(({ node: product }: any) => {
+      productEdges.forEach(({ node: product }: any) => {
         if (product.quantity > 0) {
           items.push({
             sku: product.sku,
@@ -148,15 +149,19 @@ export async function GET(request: NextRequest) {
       })
     })
 
-    console.log(`🎉 Items: ${items.length}`)
+    console.log(`🎉 Inventory items created: ${items.length}`)
 
     return NextResponse.json({
       success: true,
       data: items,
-      meta: { total: items.length },
+      meta: { 
+        total: items.length,
+        locations: locations.length
+      },
     });
   } catch (error: any) {
-    console.error("💥 Error:", error.message);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error("💥 Exception:", error.message);
+    console.error("Stack:", error.stack);
+    return NextResponse.json({ success: false, error: error.message, stack: error.stack }, { status: 500 });
   }
 }
