@@ -27,13 +27,11 @@ export async function GET(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Query warehouse_products with customer_account_id for 3PL filtering
-    // For dynamic slotting, products have 'locations' array with bin details
+    // Simplified query for dynamic slotting - use products query which supports locations
     const query = `
       query GetInventory($customer_account_id: String, $first: Int, $after: String) {
-        warehouse_products(
+        products(
           customer_account_id: $customer_account_id
-          active: true
           first: $first
           after: $after
         ) {
@@ -44,20 +42,19 @@ export async function GET(request: NextRequest) {
               node {
                 id
                 sku
-                warehouse_id
-                warehouse_identifier
-                on_hand
-                inventory_bin
-                active
-                product {
-                  name
-                  barcode
-                }
-                locations {
-                  location_id
-                  location_name
-                  quantity
-                  pickable
+                name
+                barcode
+                inventory(customer_account_id: $customer_account_id) {
+                  warehouse_id
+                  warehouse_identifier
+                  on_hand
+                  available
+                  locations {
+                    location_id
+                    location_name
+                    quantity
+                    pickable
+                  }
                 }
               }
               cursor
@@ -122,13 +119,13 @@ export async function GET(request: NextRequest) {
         }, { status: 500 });
       }
 
-      const edges = result.data?.warehouse_products?.data?.edges || []
+      const edges = result.data?.products?.data?.edges || []
       console.log(`✅ Page ${pageCount}: ${edges.length} products`)
       
       allProducts.push(...edges.map(({ node }: any) => node))
 
-      hasNextPage = result.data?.warehouse_products?.data?.pageInfo?.hasNextPage || false
-      afterCursor = result.data?.warehouse_products?.data?.pageInfo?.endCursor
+      hasNextPage = result.data?.products?.data?.pageInfo?.hasNextPage || false
+      afterCursor = result.data?.products?.data?.pageInfo?.endCursor
 
       // Small delay between pages
       if (hasNextPage) {
@@ -142,37 +139,44 @@ export async function GET(request: NextRequest) {
     const inventoryItems: any[] = []
 
     allProducts.forEach(product => {
-      if (product.locations && product.locations.length > 0) {
-        // Dynamic slotting - use locations array
-        product.locations.forEach((location: any) => {
-          if (location.quantity > 0) {
-            inventoryItems.push({
-              sku: product.sku,
-              productName: product.product?.name || product.sku,
-              quantity: location.quantity,
-              location: location.location_name,
-              locationId: location.location_id,
-              pickable: location.pickable,
-              sellable: true, // Items in locations are sellable
-              warehouse: product.warehouse_identifier,
-              barcode: product.product?.barcode,
-            })
-          }
-        })
-      } else if (product.inventory_bin && product.on_hand > 0) {
-        // Static slotting fallback - use inventory_bin
-        inventoryItems.push({
-          sku: product.sku,
-          productName: product.product?.name || product.sku,
-          quantity: product.on_hand,
-          location: product.inventory_bin,
-          locationId: product.inventory_bin,
-          pickable: product.active !== false,
-          sellable: product.active !== false,
-          warehouse: product.warehouse_identifier,
-          barcode: product.product?.barcode,
-        })
+      // Each product has inventory array with warehouse-specific data
+      if (!product.inventory || product.inventory.length === 0) {
+        return // Skip products with no inventory
       }
+
+      product.inventory.forEach((inv: any) => {
+        if (inv.locations && inv.locations.length > 0) {
+          // Dynamic slotting - use locations array
+          inv.locations.forEach((location: any) => {
+            if (location.quantity > 0) {
+              inventoryItems.push({
+                sku: product.sku,
+                productName: product.name || product.sku,
+                quantity: location.quantity,
+                location: location.location_name,
+                locationId: location.location_id,
+                pickable: location.pickable,
+                sellable: true,
+                warehouse: inv.warehouse_identifier,
+                barcode: product.barcode,
+              })
+            }
+          })
+        } else if (inv.on_hand > 0) {
+          // Warehouse total (no specific locations)
+          inventoryItems.push({
+            sku: product.sku,
+            productName: product.name || product.sku,
+            quantity: inv.on_hand,
+            location: 'General Stock',
+            locationId: inv.warehouse_id,
+            pickable: true,
+            sellable: true,
+            warehouse: inv.warehouse_identifier,
+            barcode: product.barcode,
+          })
+        }
+      })
     })
 
     console.log(`📦 Inventory items created: ${inventoryItems.length}`)
