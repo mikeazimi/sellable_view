@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
+/**
+ * Correct implementation per ShipHero API documentation
+ * Uses warehouse_products with proper pagination structure
+ */
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization')
@@ -7,57 +11,49 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const customerAccountId = searchParams.get("customer_account_id")
     const cursor = searchParams.get("cursor") || null
-    const filterSellable = searchParams.get("filter_sellable") || 'all'
-    const filterPickable = searchParams.get("filter_pickable") || 'all'
 
-    console.log('=== INVENTORY API (locations with inventory) ===')
+    console.log('=== INVENTORY API (warehouse_products) ===')
     console.log('Customer:', customerAccountId)
-    console.log('Cursor:', cursor || 'null (first page)')
-    console.log('Filters:', { sellable: filterSellable, pickable: filterPickable })
+    console.log('Cursor:', cursor || 'first page')
 
     if (!accessToken || !customerAccountId) {
-      return NextResponse.json({ success: false, error: "Auth required" }, { status: 400 });
+      return NextResponse.json({ 
+        success: false, 
+        error: "Auth and customer_account_id required" 
+      }, { status: 400 });
     }
 
-    // Build filter arguments for locations query
-    const filters: string[] = []
-    if (filterSellable === 'sellable') filters.push('sellable: true')
-    if (filterSellable === 'non-sellable') filters.push('sellable: false')
-    if (filterPickable === 'pickable') filters.push('pickable: true')
-    if (filterPickable === 'non-pickable') filters.push('pickable: false')
-    
-    const filterString = filters.length > 0 ? filters.join(', ') + ',' : ''
-
-    // Query locations with filters, get inventory for each location
+    // CORRECT query structure per ShipHero docs
     const query = `
       query ($customer_account_id: String, $cursor: String) {
-        locations(
-          ${filterString}
-          first: 250,
-          after: $cursor
+        warehouse_products(
+          customer_account_id: $customer_account_id
+          active: true
         ) {
           request_id
           complexity
-          data {
+          data(first: 100, after: $cursor) {
             pageInfo {
               hasNextPage
               endCursor
             }
             edges {
               node {
-                name
-                warehouse_id
+                sku
+                active
                 warehouse_identifier
-                pickable
-                sellable
-                inventory(first: 100) {
+                product {
+                  name
+                }
+                locations(first: 50) {
                   edges {
                     node {
-                      sku
-                      on_hand
-                      product {
+                      quantity
+                      location {
                         name
-                        active
+                        warehouse_id
+                        pickable
+                        sellable
                       }
                     }
                   }
@@ -74,7 +70,7 @@ export async function GET(request: NextRequest) {
       cursor: cursor
     }
 
-    console.log('📤 Fetching locations (250 per page)')
+    console.log('📤 Fetching page...')
 
     const response = await fetch('https://public-api.shiphero.com/graphql', {
       method: 'POST',
@@ -108,19 +104,22 @@ export async function GET(request: NextRequest) {
       }, { status: 500 });
     }
 
-    console.log('✅ Page fetched successfully')
+    console.log('✅ Page fetched')
 
-    // Return the ShipHero data structure - frontend will process
+    // Return full ShipHero response for frontend processing
     return NextResponse.json({
       success: true,
       data: result.data,
       meta: {
-        complexity: result.data?.locations?.complexity,
-        request_id: result.data?.locations?.request_id
+        complexity: result.data?.warehouse_products?.complexity,
+        request_id: result.data?.warehouse_products?.request_id
       }
     });
   } catch (error: any) {
     console.error("💥", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ 
+      success: false, 
+      error: error.message 
+    }, { status: 500 });
   }
 }

@@ -211,27 +211,33 @@ export default function InventoryPage() {
           throw new Error(result.error || 'Failed')
         }
 
-        // Process locations data
-        const locationsData = result.data?.locations?.data
-        const locationEdges = locationsData?.edges || []
+        // Process warehouse_products data (correct structure)
+        const warehouseData = result.data?.warehouse_products?.data
+        const productEdges = warehouseData?.edges || []
         
-        console.log(`✅ Page ${pageCount}: ${locationEdges.length} locations`)
+        console.log(`✅ Page ${pageCount}: ${productEdges.length} products, complexity: ${result.meta?.complexity}`)
 
-        // Transform each location's inventory
-        locationEdges.forEach(({ node: location }: any) => {
-          const inventoryEdges = location.inventory?.edges || []
+        // Transform each product and its locations
+        productEdges.forEach(({ node: product }: any) => {
+          const locationEdges = product.locations?.edges || []
           
-          inventoryEdges.forEach(({ node: inv }: any) => {
-            if (inv.on_hand > 0) {
+          locationEdges.forEach(({ node: locationData }: any) => {
+            // Apply pre-load filters (client-side)
+            if (preLoadFilters.sellable === 'sellable' && !locationData.location?.sellable) return
+            if (preLoadFilters.sellable === 'non-sellable' && locationData.location?.sellable) return
+            if (preLoadFilters.pickable === 'pickable' && !locationData.location?.pickable) return
+            if (preLoadFilters.pickable === 'non-pickable' && locationData.location?.pickable) return
+            
+            if (locationData.quantity > 0) {
               allItems.push({
-                sku: inv.sku,
-                productName: inv.product?.name || inv.sku,
-                quantity: inv.on_hand,
-                location: location.name,
-                zone: location.name?.split('-')[0] || 'Zone',
-                pickable: location.pickable,
-                sellable: location.sellable,
-                warehouse: location.warehouse_identifier || 'Unknown',
+                sku: product.sku,
+                productName: product.product?.name || product.sku,
+                quantity: locationData.quantity,
+                location: locationData.location?.name || 'Unknown',
+                zone: locationData.location?.name?.split('-')[0] || 'Zone',
+                pickable: locationData.location?.pickable || false,
+                sellable: locationData.location?.sellable || false,
+                warehouse: product.warehouse_identifier,
                 type: 'Bin',
                 barcode: ''
               })
@@ -241,8 +247,8 @@ export default function InventoryPage() {
 
         setFlatInventory([...allItems])
 
-        hasNextPage = locationsData?.pageInfo?.hasNextPage || false
-        cursor = locationsData?.pageInfo?.endCursor || null
+        hasNextPage = warehouseData?.pageInfo?.hasNextPage || false
+        cursor = warehouseData?.pageInfo?.endCursor || null
 
         if (hasNextPage) {
           await new Promise(resolve => setTimeout(resolve, 1000))
