@@ -7,13 +7,13 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const customerAccountId = searchParams.get("customer_account_id")
 
-    console.log('=== INVENTORY API (CORRECT Pagination) ===')
+    console.log('=== INVENTORY API (Reduced Batch Size) ===')
 
     if (!accessToken || !customerAccountId) {
       return NextResponse.json({ success: false, error: "Auth required" }, { status: 400 });
     }
 
-    // CORRECT: Pagination on data field, not warehouse_products
+    // Reduced batch size: 25 products x 25 locations = stays under 4004 credits
     const query = `
       query ($customer_account_id: String, $cursor: String) {
         warehouse_products(
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
         ) {
           request_id
           complexity
-          data(first: 100, after: $cursor) {
+          data(first: 25, after: $cursor) {
             pageInfo {
               hasNextPage
               endCursor
@@ -30,17 +30,12 @@ export async function GET(request: NextRequest) {
             edges {
               node {
                 sku
-                active
                 warehouse_identifier
                 product {
                   name
                   barcode
                 }
-                locations(first: 50) {
-                  pageInfo {
-                    hasNextPage
-                    endCursor
-                  }
+                locations(first: 25) {
                   edges {
                     node {
                       quantity
@@ -59,22 +54,20 @@ export async function GET(request: NextRequest) {
       }
     `;
 
-    console.log('📤 Fetching ALL inventory with pagination on data field')
+    console.log('📤 Fetching with reduced batch size (25x25)')
 
     const allProducts: any[] = []
     let hasNextPage = true
     let cursor: string | undefined = undefined
     let pageCount = 0
 
-    while (hasNextPage && pageCount < 100) {
+    while (hasNextPage && pageCount < 200) {
       pageCount++
       
       const variables = {
         customer_account_id: customerAccountId,
         cursor: cursor
       }
-
-      console.log(`📄 Fetching page ${pageCount}...`)
 
       const response = await fetch('https://public-api.shiphero.com/graphql', {
         method: 'POST',
@@ -85,15 +78,13 @@ export async function GET(request: NextRequest) {
         body: JSON.stringify({ query, variables })
       });
 
-      console.log(`📥 Page ${pageCount} status:`, response.status)
-
       if (!response.ok) {
         const text = await response.text()
-        console.error('HTTP error:', text.substring(0, 500))
+        console.error('HTTP error page', pageCount, ':', text.substring(0, 300))
         return NextResponse.json({ 
           success: false, 
-          error: `HTTP ${response.status}`,
-          details: text.substring(0, 500)
+          error: `HTTP ${response.status} on page ${pageCount}`,
+          details: text.substring(0, 300)
         }, { status: 500 });
       }
 
@@ -119,51 +110,45 @@ export async function GET(request: NextRequest) {
       cursor = result.data?.warehouse_products?.data?.pageInfo?.endCursor
 
       if (hasNextPage) {
-        await new Promise(resolve => setTimeout(resolve, 500))
+        await new Promise(resolve => setTimeout(resolve, 400))
       }
     }
 
-    console.log(`📦 Total products: ${allProducts.length} across ${pageCount} pages`)
+    console.log(`📦 Total: ${allProducts.length} products in ${pageCount} pages`)
 
-    // Transform to items
+    // Transform
     const items: any[] = []
 
     allProducts.forEach((product: any) => {
       const locationEdges = product.locations?.edges || []
       
-      if (locationEdges.length > 0) {
-        locationEdges.forEach(({ node: itemLoc }: any) => {
-          if (itemLoc.quantity > 0) {
-            items.push({
-              sku: product.sku,
-              productName: product.product?.name || product.sku,
-              quantity: itemLoc.quantity,
-              location: itemLoc.location?.name || 'Unknown',
-              zone: itemLoc.location?.name?.split('-')[0] || 'Zone',
-              pickable: itemLoc.location?.pickable || false,
-              sellable: itemLoc.location?.sellable || false,
-              warehouse: product.warehouse_identifier,
-              type: 'Bin',
-              barcode: product.product?.barcode || ''
-            })
-          }
-        })
-      }
+      locationEdges.forEach(({ node: itemLoc }: any) => {
+        if (itemLoc.quantity > 0) {
+          items.push({
+            sku: product.sku,
+            productName: product.product?.name || product.sku,
+            quantity: itemLoc.quantity,
+            location: itemLoc.location?.name || 'Unknown',
+            zone: itemLoc.location?.name?.split('-')[0] || 'Zone',
+            pickable: itemLoc.location?.pickable || false,
+            sellable: itemLoc.location?.sellable || false,
+            warehouse: product.warehouse_identifier,
+            type: 'Bin',
+            barcode: product.product?.barcode || ''
+          })
+        }
+      })
     })
 
-    console.log(`🎉 Final inventory items: ${items.length}`)
+    console.log(`🎉 Items: ${items.length}`)
 
     return NextResponse.json({
       success: true,
       data: items,
-      meta: { 
-        total: items.length,
-        products: allProducts.length,
-        pages: pageCount
-      },
+      meta: { total: items.length, pages: pageCount },
     });
   } catch (error: any) {
-    console.error("💥 Exception:", error);
+    console.error("💥", error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
