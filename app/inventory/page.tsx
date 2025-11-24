@@ -40,6 +40,8 @@ export default function InventoryPage() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null)
+  const [customerAccountId, setCustomerAccountId] = useState('')
+  const [availableCustomers, setAvailableCustomers] = useState<any[]>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFilters>({
     productName: true,
     barcode: false,
@@ -51,9 +53,50 @@ export default function InventoryPage() {
   const { toast } = useToast()
 
   useEffect(() => {
-    setIsAuthenticated(AuthManager.isAuthenticated())
-    setSelectedCustomer(CustomerManager.getSelectedCustomer())
+    const authenticated = AuthManager.isAuthenticated()
+    setIsAuthenticated(authenticated)
+    
+    // Load saved customer if exists
+    const savedCustomer = CustomerManager.getSelectedCustomer()
+    if (savedCustomer) {
+      setSelectedCustomer(savedCustomer)
+      setCustomerAccountId(savedCustomer.id)
+    }
+    
+    // Load available customers if authenticated
+    if (authenticated) {
+      loadAvailableCustomers()
+    }
   }, [])
+
+  const loadAvailableCustomers = async () => {
+    const accessToken = AuthManager.getValidToken()
+    if (!accessToken) return
+
+    try {
+      const response = await fetch('/api/shiphero/customers', {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          setAvailableCustomers(result.data)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load customers:', error)
+    }
+  }
+
+  const handleCustomerChange = (customerId: string) => {
+    setCustomerAccountId(customerId)
+    const customer = availableCustomers.find(c => c.id === customerId)
+    if (customer) {
+      setSelectedCustomer(customer)
+      CustomerManager.saveCustomer(customer)
+    }
+  }
 
   const toggleColumn = (column: keyof ColumnFilters) => {
     setColumnFilters(prev => ({ ...prev, [column]: !prev[column] }))
@@ -70,12 +113,10 @@ export default function InventoryPage() {
       return
     }
 
-    const customerAccountId = CustomerManager.getCustomerAccountId()
-    
     if (!customerAccountId) {
       toast({
         title: 'Customer account required',
-        description: 'Please select a customer account in Settings first',
+        description: 'Please select a customer account from the dropdown',
         variant: 'destructive',
       })
       return
@@ -308,13 +349,36 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {/* Column Filters */}
+      {/* Filters Card */}
       {isAuthenticated && flatInventory.length === 0 && !isLoading && (
         <Card className="mb-6">
-          <CardContent className="pt-6">
-            <div className="mb-4">
+          <CardContent className="pt-6 space-y-6">
+            {/* Customer Account Selection */}
+            <div>
+              <h3 className="font-semibold mb-2">Customer Account</h3>
+              <p className="text-sm text-gray-500 mb-3">Select which client's data to view</p>
+              {availableCustomers.length > 0 ? (
+                <select
+                  value={customerAccountId}
+                  onChange={(e) => handleCustomerChange(e.target.value)}
+                  className="w-full md:w-96 px-3 py-2 border rounded-lg bg-white dark:bg-gray-800"
+                >
+                  <option value="">Select a customer account...</option>
+                  {availableCustomers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name} (ID: {customer.legacy_id})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="text-sm text-gray-500">Loading customer accounts...</div>
+              )}
+            </div>
+
+            {/* Column Filters */}
+            <div>
               <h3 className="font-semibold mb-2">Select Columns to Load</h3>
-              <p className="text-sm text-gray-500">Choose which data to fetch - fewer columns = faster loading</p>
+              <p className="text-sm text-gray-500 mb-3">Choose which data to fetch - fewer columns = faster loading</p>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               <label className="flex items-center gap-2 cursor-pointer">
