@@ -24,6 +24,15 @@ interface FlatInventoryItem {
 
 type SortField = 'warehouse' | 'location' | 'sku' | 'productName' | 'quantity' | 'zone'
 
+interface ColumnFilters {
+  productName: boolean
+  barcode: boolean
+  warehouse: boolean
+  location: boolean
+  pickable: boolean
+  sellable: boolean
+}
+
 export default function InventoryPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [flatInventory, setFlatInventory] = useState<FlatInventoryItem[]>([])
@@ -31,12 +40,24 @@ export default function InventoryPage() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null)
+  const [columnFilters, setColumnFilters] = useState<ColumnFilters>({
+    productName: true,
+    barcode: false,
+    warehouse: true,
+    location: true,
+    pickable: true,
+    sellable: true,
+  })
   const { toast } = useToast()
 
   useEffect(() => {
     setIsAuthenticated(AuthManager.isAuthenticated())
     setSelectedCustomer(CustomerManager.getSelectedCustomer())
   }, [])
+
+  const toggleColumn = (column: keyof ColumnFilters) => {
+    setColumnFilters(prev => ({ ...prev, [column]: !prev[column] }))
+  }
 
   const loadInventory = async () => {
     const accessToken = AuthManager.getValidToken()
@@ -73,8 +94,19 @@ export default function InventoryPage() {
       while (hasNextPage && pageCount < 200) {
         pageCount++
         
-        // Build URL with cursor for pagination
-        const url = `/api/shiphero/inventory?customer_account_id=${encodeURIComponent(customerAccountId)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`
+        // Build URL with cursor and column filters
+        const filterParams = new URLSearchParams({
+          customer_account_id: customerAccountId,
+          ...(cursor && { cursor }),
+          include_product_name: columnFilters.productName.toString(),
+          include_barcode: columnFilters.barcode.toString(),
+          include_warehouse: columnFilters.warehouse.toString(),
+          include_location: columnFilters.location.toString(),
+          include_pickable: columnFilters.pickable.toString(),
+          include_sellable: columnFilters.sellable.toString(),
+        })
+        
+        const url = `/api/shiphero/inventory?${filterParams.toString()}`
         
         console.log(`📄 Fetching page ${pageCount}...`)
         
@@ -275,6 +307,77 @@ export default function InventoryPage() {
           )}
         </div>
       </div>
+
+      {/* Column Filters */}
+      {isAuthenticated && flatInventory.length === 0 && !isLoading && (
+        <Card className="mb-6">
+          <CardContent className="pt-6">
+            <div className="mb-4">
+              <h3 className="font-semibold mb-2">Select Columns to Load</h3>
+              <p className="text-sm text-gray-500">Choose which data to fetch - fewer columns = faster loading</p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={columnFilters.productName}
+                  onChange={() => toggleColumn('productName')}
+                  className="rounded"
+                />
+                <span className="text-sm">Product Name</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={columnFilters.barcode}
+                  onChange={() => toggleColumn('barcode')}
+                  className="rounded"
+                />
+                <span className="text-sm">Barcode</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={columnFilters.warehouse}
+                  onChange={() => toggleColumn('warehouse')}
+                  className="rounded"
+                />
+                <span className="text-sm">Warehouse</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={columnFilters.location}
+                  onChange={() => toggleColumn('location')}
+                  className="rounded"
+                />
+                <span className="text-sm">Bin Location</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={columnFilters.pickable}
+                  onChange={() => toggleColumn('pickable')}
+                  className="rounded"
+                />
+                <span className="text-sm">Pickable Status</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={columnFilters.sellable}
+                  onChange={() => toggleColumn('sellable')}
+                  className="rounded"
+                />
+                <span className="text-sm">Sellable Status</span>
+              </label>
+            </div>
+            <p className="text-xs text-gray-500 mt-3">
+              Note: SKU and Quantity are always included
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {isLoading && flatInventory.length > 0 && (
         <div className="mb-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">

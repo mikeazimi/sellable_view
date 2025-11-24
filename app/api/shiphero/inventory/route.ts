@@ -11,10 +11,19 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const customerAccountId = searchParams.get("customer_account_id")
     const cursor = searchParams.get("cursor") || null
+    
+    // Get column filter preferences
+    const includeProductName = searchParams.get("include_product_name") !== 'false'
+    const includeBarcode = searchParams.get("include_barcode") === 'true'
+    const includeWarehouse = searchParams.get("include_warehouse") !== 'false'
+    const includeLocation = searchParams.get("include_location") !== 'false'
+    const includePickable = searchParams.get("include_pickable") !== 'false'
+    const includeSellable = searchParams.get("include_sellable") !== 'false'
 
     console.log('=== INVENTORY API (Single Page) ===')
     console.log('Customer ID:', customerAccountId)
     console.log('Cursor:', cursor ? cursor.substring(0, 20) + '...' : 'null (first page)')
+    console.log('Filters:', { includeProductName, includeBarcode, includeWarehouse, includeLocation, includePickable, includeSellable })
 
     if (!accessToken) {
       return NextResponse.json({ success: false, error: "Auth required" }, { status: 401 });
@@ -23,6 +32,22 @@ export async function GET(request: NextRequest) {
     if (!customerAccountId) {
       return NextResponse.json({ success: false, error: "customer_account_id required" }, { status: 400 });
     }
+
+    // Build dynamic query based on selected columns - reduces complexity!
+    const productFields = includeProductName || includeBarcode
+      ? `product {
+          ${includeProductName ? 'name' : ''}
+          ${includeBarcode ? 'barcode' : ''}
+        }`
+      : ''
+
+    const locationFields = includeLocation || includePickable || includeSellable
+      ? `location {
+          ${includeLocation ? 'name' : ''}
+          ${includePickable ? 'pickable' : ''}
+          ${includeSellable ? 'sellable' : ''}
+        }`
+      : ''
 
     const query = `
       query ($customer_account_id: String, $cursor: String) {
@@ -40,20 +65,13 @@ export async function GET(request: NextRequest) {
             edges {
               node {
                 sku
-                warehouse_identifier
-                product {
-                  name
-                  barcode
-                }
+                ${includeWarehouse ? 'warehouse_identifier' : ''}
+                ${productFields}
                 locations(first: 40) {
                   edges {
                     node {
                       quantity
-                      location {
-                        name
-                        pickable
-                        sellable
-                      }
+                      ${locationFields}
                     }
                   }
                 }
