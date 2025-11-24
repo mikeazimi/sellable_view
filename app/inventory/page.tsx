@@ -160,8 +160,8 @@ export default function InventoryPage() {
       let accountIdToUse = customerAccountId.trim()
       
       if (/^\d+$/.test(accountIdToUse)) {
-        // Convert: 88774 → CustomerAccount:88774 → base64
-        accountIdToUse = Buffer.from(`CustomerAccount:${accountIdToUse}`).toString('base64')
+        // Convert: 88774 → CustomerAccount:88774 → base64 (browser-compatible)
+        accountIdToUse = btoa(`CustomerAccount:${accountIdToUse}`)
         console.log(`Converted ${customerAccountId} to UUID: ${accountIdToUse}`)
       }
       
