@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
+/**
+ * Get inventory for dynamic slotting warehouse filtered by customer account
+ * Per ShipHero docs: warehouse_products query with customer_account_id parameter
+ */
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization')
@@ -7,8 +11,9 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const customerAccountId = searchParams.get("customer_account_id")
 
-    console.log('=== INVENTORY API ===')
-    console.log('Customer:', customerAccountId)
+    console.log('=== INVENTORY API (warehouse_products query) ===')
+    console.log('Customer Account ID:', customerAccountId)
+    console.log('Token present:', !!accessToken)
 
     if (!accessToken) {
       return NextResponse.json({ success: false, error: "Auth required" }, { status: 401 });
@@ -18,31 +23,40 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: "customer_account_id required" }, { status: 400 });
     }
 
-    // Get locations with products - NOW ADD REAL DATA
+    // EXACT query from ShipHero docs section 2354-2433 (warehouse_products query)
     const query = `
-      query ($customer_account_id: String) {
-        locations {
+      query GetWarehouseProducts(
+        $warehouse_id: String
+        $customer_account_id: String
+        $sku: String
+      ) {
+        warehouse_products(
+          warehouse_id: $warehouse_id
+          customer_account_id: $customer_account_id
+          sku: $sku
+          active: true
+        ) {
           request_id
           complexity
           data {
             edges {
               node {
                 id
-                name
-                pickable
-                sellable
+                sku
                 warehouse_id
-                products(customer_account_id: $customer_account_id) {
-                  edges {
-                    node {
-                      sku
-                      quantity
-                      product {
-                        name
-                        barcode
-                      }
-                    }
-                  }
+                warehouse_identifier
+                on_hand
+                inventory_bin
+                active
+                product {
+                  name
+                  barcode
+                }
+                locations {
+                  location_id
+                  location_name
+                  quantity
+                  pickable
                 }
               }
             }
@@ -51,9 +65,14 @@ export async function GET(request: NextRequest) {
       }
     `;
 
-    const variables = { customer_account_id: customerAccountId }
+    const variables = {
+      customer_account_id: customerAccountId,
+      warehouse_id: null,
+      sku: null
+    }
 
-    console.log('📤 Fetching with customer filter')
+    console.log('📤 Sending warehouse_products query')
+    console.log('Variables:', JSON.stringify(variables))
 
     const response = await fetch('https://public-api.shiphero.com/graphql', {
       method: 'POST',
@@ -64,83 +83,100 @@ export async function GET(request: NextRequest) {
       body: JSON.stringify({ query, variables })
     });
 
-    console.log('📥 Status:', response.status)
-
-    const text = await response.text()
+    console.log('📥 Response status:', response.status)
 
     if (!response.ok) {
-      console.error('HTTP error:', text.substring(0, 300))
+      const text = await response.text()
+      console.error('❌ HTTP error:', text)
       return NextResponse.json({ 
         success: false, 
         error: `HTTP ${response.status}`,
-        details: text.substring(0, 300)
+        details: text
       }, { status: 500 });
     }
 
-    const result = JSON.parse(text)
+    const result = await response.json()
+    console.log('Result keys:', Object.keys(result))
+    console.log('Result:', JSON.stringify(result).substring(0, 500))
 
     if (result.errors) {
-      console.error('GraphQL errors:', result.errors)
+      console.error('❌ GraphQL errors:', JSON.stringify(result.errors))
       return NextResponse.json({ 
         success: false, 
         error: result.errors[0].message,
-        errors: result.errors
+        errors: result.errors,
+        query_sent: query.substring(0, 200)
       }, { status: 500 });
     }
 
-    // Get warehouses
-    const whQuery = `query { account { data { warehouses { id identifier } } } }`;
-    const whRes = await fetch('https://public-api.shiphero.com/graphql', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({ query: whQuery })
-    });
+    const products = result.data?.warehouse_products?.data?.edges?.map(({ node }: any) => node) || []
+    console.log(`✅ Products received: ${products.length}`)
 
-    const whResult = await whRes.json()
-    const warehouseMap = new Map()
-    whResult.data?.account?.data?.warehouses?.forEach((wh: any) => {
-      warehouseMap.set(wh.id, wh.identifier)
-    })
-
-    const locations = result.data?.locations?.data?.edges?.map(({ node }: any) => node) || []
-    console.log(`✅ Locations: ${locations.length}`)
-
-    // Build real inventory items
+    // Transform to inventory items
     const items: any[] = []
 
-    locations.forEach((location: any) => {
-      const productEdges = location.products?.edges || []
-      
-      productEdges.forEach(({ node: prod }: any) => {
-        if (prod.quantity > 0) {
-          items.push({
-            sku: prod.sku,
-            productName: prod.product?.name || prod.sku,
-            quantity: prod.quantity,
-            location: location.name,
-            zone: location.name.split('-')[0] || 'Zone',
-            pickable: location.pickable,
-            sellable: location.sellable,
-            warehouse: warehouseMap.get(location.warehouse_id) || 'Primary',
-            type: 'Bin',
-            barcode: prod.product?.barcode
-          })
-        }
-      })
+    products.forEach((product: any) => {
+      // Check if product has locations array (dynamic slotting)
+      if (product.locations && Array.isArray(product.locations) && product.locations.length > 0) {
+        console.log(`Product ${product.sku} has ${product.locations.length} locations`)
+        
+        product.locations.forEach((location: any) => {
+          if (location.quantity > 0) {
+            items.push({
+              sku: product.sku,
+              productName: product.product?.name || product.sku,
+              quantity: location.quantity,
+              location: location.location_name,
+              locationId: location.location_id,
+              zone: location.location_name?.split('-')[0] || 'Zone',
+              pickable: location.pickable,
+              sellable: true,
+              warehouse: product.warehouse_identifier,
+              warehouseId: product.warehouse_id,
+              type: 'Bin',
+              barcode: product.product?.barcode
+            })
+          }
+        })
+      } else if (product.on_hand > 0) {
+        // Fallback: product has on_hand but no location details
+        console.log(`Product ${product.sku} - no locations, on_hand: ${product.on_hand}`)
+        
+        items.push({
+          sku: product.sku,
+          productName: product.product?.name || product.sku,
+          quantity: product.on_hand,
+          location: product.inventory_bin || 'Unassigned',
+          locationId: product.inventory_bin || 'unassigned',
+          zone: product.inventory_bin?.split('-')[0] || 'General',
+          pickable: true,
+          sellable: true,
+          warehouse: product.warehouse_identifier,
+          warehouseId: product.warehouse_id,
+          type: 'Bin',
+          barcode: product.product?.barcode
+        })
+      }
     })
 
-    console.log(`🎉 Real items: ${items.length}`)
+    console.log(`🎉 Total inventory items: ${items.length}`)
 
     return NextResponse.json({
       success: true,
       data: items,
-      meta: { total: items.length },
+      meta: { 
+        total: items.length,
+        products_queried: products.length,
+        query_type: 'warehouse_products with customer_account_id'
+      },
     });
   } catch (error: any) {
-    console.error("💥 Error:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error("💥 Exception:", error);
+    console.error("Stack:", error.stack);
+    return NextResponse.json({ 
+      success: false, 
+      error: error.message,
+      stack: error.stack
+    }, { status: 500 });
   }
 }
