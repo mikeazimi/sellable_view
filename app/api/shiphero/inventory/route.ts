@@ -7,24 +7,22 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const customerAccountId = searchParams.get("customer_account_id")
 
-    console.log('=== INVENTORY API (Paginated with locations) ===')
+    console.log('=== INVENTORY API (CORRECT Pagination) ===')
 
     if (!accessToken || !customerAccountId) {
       return NextResponse.json({ success: false, error: "Auth required" }, { status: 400 });
     }
 
-    // EXACT query you provided - with pagination on both levels!
+    // CORRECT: Pagination on data field, not warehouse_products
     const query = `
       query ($customer_account_id: String, $cursor: String) {
         warehouse_products(
           customer_account_id: $customer_account_id
           active: true
-          first: 100
-          after: $cursor
         ) {
           request_id
           complexity
-          data {
+          data(first: 100, after: $cursor) {
             pageInfo {
               hasNextPage
               endCursor
@@ -39,6 +37,10 @@ export async function GET(request: NextRequest) {
                   barcode
                 }
                 locations(first: 50) {
+                  pageInfo {
+                    hasNextPage
+                    endCursor
+                  }
                   edges {
                     node {
                       quantity
@@ -57,14 +59,14 @@ export async function GET(request: NextRequest) {
       }
     `;
 
-    console.log('📤 Fetching ALL products with pagination')
+    console.log('📤 Fetching ALL inventory with pagination on data field')
 
     const allProducts: any[] = []
     let hasNextPage = true
     let cursor: string | undefined = undefined
     let pageCount = 0
 
-    while (hasNextPage && pageCount < 50) {
+    while (hasNextPage && pageCount < 100) {
       pageCount++
       
       const variables = {
@@ -72,7 +74,7 @@ export async function GET(request: NextRequest) {
         cursor: cursor
       }
 
-      console.log(`📄 Page ${pageCount}`)
+      console.log(`📄 Fetching page ${pageCount}...`)
 
       const response = await fetch('https://public-api.shiphero.com/graphql', {
         method: 'POST',
@@ -82,6 +84,8 @@ export async function GET(request: NextRequest) {
         },
         body: JSON.stringify({ query, variables })
       });
+
+      console.log(`📥 Page ${pageCount} status:`, response.status)
 
       if (!response.ok) {
         const text = await response.text()
@@ -105,11 +109,11 @@ export async function GET(request: NextRequest) {
       }
 
       const edges = result.data?.warehouse_products?.data?.edges || []
-      const pageProducts = edges.map(({ node }: any) => node)
+      const complexity = result.data?.warehouse_products?.complexity || 0
       
-      console.log(`✅ Page ${pageCount}: ${edges.length} products, complexity: ${result.data.warehouse_products.complexity}`)
+      console.log(`✅ Page ${pageCount}: ${edges.length} products, complexity: ${complexity}`)
       
-      allProducts.push(...pageProducts)
+      allProducts.push(...edges.map(({ node }: any) => node))
 
       hasNextPage = result.data?.warehouse_products?.data?.pageInfo?.hasNextPage || false
       cursor = result.data?.warehouse_products?.data?.pageInfo?.endCursor
@@ -119,16 +123,15 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    console.log(`📦 Total products fetched: ${allProducts.length}`)
+    console.log(`📦 Total products: ${allProducts.length} across ${pageCount} pages`)
 
-    // Transform to flat items
+    // Transform to items
     const items: any[] = []
 
     allProducts.forEach((product: any) => {
       const locationEdges = product.locations?.edges || []
       
       if (locationEdges.length > 0) {
-        // Has specific locations - use them
         locationEdges.forEach(({ node: itemLoc }: any) => {
           if (itemLoc.quantity > 0) {
             items.push({
@@ -148,7 +151,7 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    console.log(`🎉 Final items with locations: ${items.length}`)
+    console.log(`🎉 Final inventory items: ${items.length}`)
 
     return NextResponse.json({
       success: true,
@@ -160,7 +163,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error("💥", error);
+    console.error("💥 Exception:", error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
