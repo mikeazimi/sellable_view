@@ -68,19 +68,50 @@ export async function POST(request: NextRequest) {
     const locations = result.data?.locations?.data?.edges?.map(({ node }: any) => node) || []
     console.log(`✅ Fetched ${locations.length} locations from ShipHero`)
 
-    // TODO: Save to Supabase
-    // For now, return the data so you can verify the structure
+    // Save to Supabase
+    const { supabaseAdmin } = await import('@/lib/supabase')
     
-    console.log('Sample location:', locations[0])
+    const locationsToUpsert = locations.map((loc: any) => ({
+      id: loc.id,
+      name: loc.name,
+      sellable: loc.sellable || false,
+      pickable: loc.pickable || false,
+      warehouse_id: loc.warehouse_id,
+      zone: loc.name?.split('-')[0] || 'Unknown',
+      last_updated: new Date().toISOString()
+    }))
+
+    console.log(`💾 Saving ${locationsToUpsert.length} locations to Supabase...`)
+
+    // Batch upsert in chunks of 100
+    const chunkSize = 100
+    let saved = 0
+    
+    for (let i = 0; i < locationsToUpsert.length; i += chunkSize) {
+      const chunk = locationsToUpsert.slice(i, i + chunkSize)
+      
+      const { error } = await supabaseAdmin
+        .from('locations')
+        .upsert(chunk, { onConflict: 'id' })
+
+      if (error) {
+        console.error('Supabase error:', error)
+        throw new Error(`Failed to save chunk: ${error.message}`)
+      }
+
+      saved += chunk.length
+      console.log(`Saved ${saved}/${locationsToUpsert.length} locations`)
+    }
+
+    console.log('✅ All locations synced to Supabase!')
 
     return NextResponse.json({
       success: true,
-      message: `Fetched ${locations.length} locations ready for Supabase`,
-      data: locations.slice(0, 5), // Show first 5 as sample
+      message: `Synced ${saved} locations to Supabase`,
       meta: {
         total_locations: locations.length,
         complexity: result.data?.locations?.complexity,
-        next_step: 'Add Supabase connection to save this data'
+        synced_at: new Date().toISOString()
       }
     });
 
