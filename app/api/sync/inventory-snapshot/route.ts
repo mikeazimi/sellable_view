@@ -19,18 +19,28 @@ export async function POST(request: NextRequest) {
     console.log('=== INVENTORY SNAPSHOT SYNC STARTED ===')
     console.log('Customer Account ID:', customerAccountId || 'All customers')
 
-    // Step 1: Request snapshot generation (with optional customer filter)
+    // Step 1: Request snapshot generation using EXACT ShipHero mutation structure
     const generateMutation = `
-      mutation ($customer_account_id: String) {
-        inventory_generate_snapshot(data: {
-          ${customerAccountId ? 'customer_account_id: $customer_account_id' : ''}
-        }) {
+      mutation GenerateInventorySnapshot(
+        $customer_account_id: String
+        $has_inventory: Boolean
+        $new_format: Boolean
+      ) {
+        inventory_generate_snapshot(
+          data: {
+            customer_account_id: $customer_account_id
+            has_inventory: $has_inventory
+            new_format: $new_format
+          }
+        ) {
           request_id
           complexity
           snapshot {
-            id
+            snapshot_id
             status
             snapshot_url
+            snapshot_expiration
+            error
             created_at
           }
         }
@@ -47,9 +57,19 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({ 
         query: generateMutation,
-        variables: customerAccountId ? { customer_account_id: customerAccountId } : {}
+        variables: {
+          customer_account_id: customerAccountId || null,
+          has_inventory: true, // Only include products with inventory
+          new_format: true // Use new snapshot format
+        }
       })
     });
+
+    console.log('Mutation variables:', {
+      customer_account_id: customerAccountId,
+      has_inventory: true,
+      new_format: true
+    })
 
     if (!generateResponse.ok) {
       throw new Error(`Failed to generate snapshot: ${generateResponse.status}`)
@@ -61,31 +81,36 @@ export async function POST(request: NextRequest) {
       throw new Error(`GraphQL error: ${generateResult.errors[0].message}`)
     }
 
-    const snapshotId = generateResult.data?.inventory_generate_snapshot?.snapshot?.id
+    const snapshotId = generateResult.data?.inventory_generate_snapshot?.snapshot?.snapshot_id
     
     if (!snapshotId) {
+      console.error('Generate result:', JSON.stringify(generateResult))
       throw new Error('No snapshot ID returned')
     }
 
     console.log(`✅ Snapshot requested: ${snapshotId}`)
 
-    // Step 2: Poll until snapshot is ready
+    // Step 2: Poll until snapshot is ready (using exact ShipHero structure)
     let snapshotUrl: string | null = null
     let attempts = 0
-    const maxAttempts = 60 // 5 minutes max
+    const maxAttempts = 60 // 30 minutes max (30 second intervals)
 
     while (!snapshotUrl && attempts < maxAttempts) {
       attempts++
       
-      await new Promise(resolve => setTimeout(resolve, 5000)) // Wait 5 seconds
+      await new Promise(resolve => setTimeout(resolve, 30000)) // Wait 30 seconds (snapshots take time!)
       
       const statusQuery = `
-        query {
-          inventory_snapshot(snapshot_id: "${snapshotId}") {
+        query GetSnapshotStatus($snapshot_id: String!) {
+          inventory_snapshot(snapshot_id: $snapshot_id) {
+            request_id
+            complexity
             snapshot {
-              id
+              snapshot_id
               status
               snapshot_url
+              snapshot_expiration
+              error
             }
           }
         }
@@ -97,18 +122,24 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`
         },
-        body: JSON.stringify({ query: statusQuery })
+        body: JSON.stringify({ 
+          query: statusQuery,
+          variables: { snapshot_id: snapshotId }
+        })
       });
 
       const statusResult = await statusResponse.json()
       const snapshot = statusResult.data?.inventory_snapshot?.snapshot
 
-      console.log(`Poll ${attempts}: Status = ${snapshot?.status}`)
+      console.log(`Poll ${attempts}/60: Status = ${snapshot?.status}`)
 
-      if (snapshot?.status === 'completed' && snapshot?.snapshot_url) {
+      if (snapshot?.status === 'success' && snapshot?.snapshot_url) {
         snapshotUrl = snapshot.snapshot_url
+        console.log('✅ Snapshot ready for download!')
       } else if (snapshot?.status === 'error') {
-        throw new Error('Snapshot generation failed')
+        throw new Error(`Snapshot failed: ${snapshot?.error}`)
+      } else {
+        console.log('Still processing... will check again in 30s')
       }
     }
 
