@@ -1,0 +1,173 @@
+'use client'
+
+import { useState } from 'react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Upload, CheckCircle, AlertCircle } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
+import Papa from 'papaparse'
+
+export default function AdminPage() {
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadResult, setUploadResult] = useState<any>(null)
+  const { toast } = useToast()
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setIsUploading(true)
+    setUploadResult(null)
+
+    try {
+      console.log('Parsing CSV...')
+      
+      Papa.parse(file, {
+        header: true,
+        complete: async (results) => {
+          console.log(`Parsed ${results.data.length} rows`)
+          
+          // Transform CSV to database format
+          const locations = results.data
+            .filter((row: any) => row.Location && row.Location !== '#VALUE!')
+            .map((row: any) => ({
+              warehouse: row.Warehouse || 'Primary',
+              location: row.Location,
+              pickable: row.Pickable === 'Yes',
+              sellable: row.Sellable === 'Yes',
+              pick_priority: parseInt(row['Pick Priority']) || 0,
+              transfer_bin: row['Transfer bin'] === 'Yes',
+              staging: row.Staging === 'Yes',
+              quantity: parseInt(row.Quantity) || 0,
+              type: row.Type || 'None'
+            }))
+
+          console.log(`Uploading ${locations.length} locations...`)
+
+          const response = await fetch('/api/upload-locations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ locations })
+          })
+
+          const result = await response.json()
+
+          if (!result.success) {
+            throw new Error(result.error)
+          }
+
+          setUploadResult(result)
+          toast({
+            title: 'Upload complete',
+            description: result.message,
+          })
+        },
+        error: (error: any) => {
+          throw new Error(`CSV parse error: ${error.message}`)
+        }
+      })
+
+    } catch (error: any) {
+      console.error('Upload error:', error)
+      setUploadResult({ success: false, error: error.message })
+      toast({
+        title: 'Upload failed',
+        description: error.message,
+        variant: 'destructive',
+      })
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  return (
+    <div className="p-6">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+          Admin - Seed Location Data
+        </h1>
+        <p className="text-gray-600 dark:text-gray-400">
+          Upload CSV to populate location cache
+        </p>
+      </div>
+
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+              <Upload className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <CardTitle className="text-xl">Upload Locations CSV</CardTitle>
+              <CardDescription>
+                Seed Supabase with location data from CSV file
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-8 text-center">
+            <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleFileUpload}
+              disabled={isUploading}
+              className="hidden"
+              id="csv-upload"
+            />
+            <label htmlFor="csv-upload">
+              <Button asChild disabled={isUploading}>
+                <span>
+                  {isUploading ? 'Uploading...' : 'Choose CSV File'}
+                </span>
+              </Button>
+            </label>
+            <p className="text-sm text-gray-500 mt-3">
+              Upload initial_locations_to_upload.csv
+            </p>
+          </div>
+
+          {uploadResult && (
+            <div className={`p-4 rounded-lg border ${
+              uploadResult.success 
+                ? 'bg-green-50 border-green-200' 
+                : 'bg-red-50 border-red-200'
+            }`}>
+              <div className="flex items-start gap-3">
+                {uploadResult.success ? (
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                ) : (
+                  <AlertCircle className="w-5 h-5 text-red-600" />
+                )}
+                <div>
+                  <h3 className="font-semibold">
+                    {uploadResult.success ? 'Upload Successful' : 'Upload Failed'}
+                  </h3>
+                  <p className="text-sm mt-1">
+                    {uploadResult.message || uploadResult.error}
+                  </p>
+                  {uploadResult.total && (
+                    <p className="text-xs text-gray-600 mt-2">
+                      Total: {uploadResult.total} locations
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="text-sm text-gray-600 space-y-2">
+            <p><strong>CSV Format Expected:</strong></p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>Warehouse, Location, Pickable, Sellable, Type</li>
+              <li>Pickable/Sellable: "Yes" or "No"</li>
+              <li>Rows with #VALUE! will be skipped</li>
+            </ul>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
