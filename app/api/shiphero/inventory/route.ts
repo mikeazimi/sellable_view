@@ -1,19 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 
+/**
+ * Fetch ONE page of inventory data
+ * Frontend will loop and call this multiple times
+ */
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization')
     const accessToken = authHeader?.replace('Bearer ', '')
     const searchParams = request.nextUrl.searchParams
     const customerAccountId = searchParams.get("customer_account_id")
+    const cursor = searchParams.get("cursor") || null
 
-    console.log('=== INVENTORY API (Reduced Batch Size) ===')
+    console.log('=== INVENTORY API (Single Page) ===')
+    console.log('Customer ID:', customerAccountId)
+    console.log('Cursor:', cursor ? cursor.substring(0, 20) + '...' : 'null (first page)')
 
-    if (!accessToken || !customerAccountId) {
-      return NextResponse.json({ success: false, error: "Auth required" }, { status: 400 });
+    if (!accessToken) {
+      return NextResponse.json({ success: false, error: "Auth required" }, { status: 401 });
     }
 
-    // Reduced batch size: 25 products x 25 locations = stays under 4004 credits
+    if (!customerAccountId) {
+      return NextResponse.json({ success: false, error: "customer_account_id required" }, { status: 400 });
+    }
+
     const query = `
       query ($customer_account_id: String, $cursor: String) {
         warehouse_products(
@@ -22,7 +32,7 @@ export async function GET(request: NextRequest) {
         ) {
           request_id
           complexity
-          data(first: 25, after: $cursor) {
+          data(first: 50, after: $cursor) {
             pageInfo {
               hasNextPage
               endCursor
@@ -35,7 +45,7 @@ export async function GET(request: NextRequest) {
                   name
                   barcode
                 }
-                locations(first: 25) {
+                locations(first: 50) {
                   edges {
                     node {
                       quantity
@@ -54,99 +64,55 @@ export async function GET(request: NextRequest) {
       }
     `;
 
-    console.log('📤 Fetching with reduced batch size (25x25)')
-
-    const allProducts: any[] = []
-    let hasNextPage = true
-    let cursor: string | undefined = undefined
-    let pageCount = 0
-
-    while (hasNextPage && pageCount < 200) {
-      pageCount++
-      
-      const variables = {
-        customer_account_id: customerAccountId,
-        cursor: cursor
-      }
-
-      const response = await fetch('https://public-api.shiphero.com/graphql', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`
-        },
-        body: JSON.stringify({ query, variables })
-      });
-
-      if (!response.ok) {
-        const text = await response.text()
-        console.error('HTTP error page', pageCount, ':', text.substring(0, 300))
-        return NextResponse.json({ 
-          success: false, 
-          error: `HTTP ${response.status} on page ${pageCount}`,
-          details: text.substring(0, 300)
-        }, { status: 500 });
-      }
-
-      const result = await response.json()
-
-      if (result.errors) {
-        console.error('GraphQL errors:', result.errors)
-        return NextResponse.json({ 
-          success: false, 
-          error: result.errors[0].message,
-          errors: result.errors
-        }, { status: 500 });
-      }
-
-      const edges = result.data?.warehouse_products?.data?.edges || []
-      const complexity = result.data?.warehouse_products?.complexity || 0
-      
-      console.log(`✅ Page ${pageCount}: ${edges.length} products, complexity: ${complexity}`)
-      
-      allProducts.push(...edges.map(({ node }: any) => node))
-
-      hasNextPage = result.data?.warehouse_products?.data?.pageInfo?.hasNextPage || false
-      cursor = result.data?.warehouse_products?.data?.pageInfo?.endCursor
-
-      if (hasNextPage) {
-        await new Promise(resolve => setTimeout(resolve, 400))
-      }
+    const variables = {
+      customer_account_id: customerAccountId,
+      cursor: cursor
     }
 
-    console.log(`📦 Total: ${allProducts.length} products in ${pageCount} pages`)
+    const response = await fetch('https://public-api.shiphero.com/graphql', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({ query, variables })
+    });
 
-    // Transform
-    const items: any[] = []
+    console.log('ShipHero response:', response.status)
 
-    allProducts.forEach((product: any) => {
-      const locationEdges = product.locations?.edges || []
-      
-      locationEdges.forEach(({ node: itemLoc }: any) => {
-        if (itemLoc.quantity > 0) {
-          items.push({
-            sku: product.sku,
-            productName: product.product?.name || product.sku,
-            quantity: itemLoc.quantity,
-            location: itemLoc.location?.name || 'Unknown',
-            zone: itemLoc.location?.name?.split('-')[0] || 'Zone',
-            pickable: itemLoc.location?.pickable || false,
-            sellable: itemLoc.location?.sellable || false,
-            warehouse: product.warehouse_identifier,
-            type: 'Bin',
-            barcode: product.product?.barcode || ''
-          })
-        }
-      })
-    })
+    if (!response.ok) {
+      const text = await response.text()
+      console.error('HTTP error:', text.substring(0, 500))
+      return NextResponse.json({ 
+        success: false, 
+        error: `HTTP ${response.status}`,
+        details: text.substring(0, 500)
+      }, { status: 500 });
+    }
 
-    console.log(`🎉 Items: ${items.length}`)
+    const result = await response.json()
 
+    if (result.errors) {
+      console.error('GraphQL errors:', result.errors)
+      return NextResponse.json({ 
+        success: false, 
+        error: result.errors[0].message,
+        errors: result.errors
+      }, { status: 500 });
+    }
+
+    // Return the FULL ShipHero response - frontend will handle it
+    console.log('✅ Returning one page of data')
+    
     return NextResponse.json({
       success: true,
-      data: items,
-      meta: { total: items.length, pages: pageCount },
+      data: result.data,
+      meta: {
+        complexity: result.data?.warehouse_products?.complexity,
+        request_id: result.data?.warehouse_products?.request_id
+      }
     });
+
   } catch (error: any) {
     console.error("💥", error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

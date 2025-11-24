@@ -63,52 +63,94 @@ export default function InventoryPage() {
     setIsLoading(true)
     
     try {
-      console.log('🚀 Loading inventory for customer:', customerAccountId)
-      console.log('Token:', accessToken.substring(0, 20) + '...')
+      console.log('🚀 Loading ALL inventory - frontend pagination')
       
-      const url = `/api/shiphero/inventory?customer_account_id=${encodeURIComponent(customerAccountId)}`
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      })
+      const allItems: FlatInventoryItem[] = []
+      let hasNextPage = true
+      let cursor: string | null = null
+      let pageCount = 0
 
-      console.log('✅ Server responded:', response.status)
+      while (hasNextPage && pageCount < 200) {
+        pageCount++
+        
+        // Build URL with cursor for pagination
+        const url = `/api/shiphero/inventory?customer_account_id=${encodeURIComponent(customerAccountId)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`
+        
+        console.log(`📄 Fetching page ${pageCount}...`)
+        
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error('❌ Server error:', errorData)
-        
-        if (response.status === 401) {
-          AuthManager.clearAuth()
-          setIsAuthenticated(false)
-          throw new Error('Authentication expired - please re-authenticate in Settings')
+        if (!response.ok) {
+          const errorData = await response.json()
+          console.error('❌ Page', pageCount, 'error:', errorData)
+          
+          if (response.status === 401) {
+            AuthManager.clearAuth()
+            setIsAuthenticated(false)
+            throw new Error('Authentication expired')
+          }
+          
+          throw new Error(errorData.error || `Error on page ${pageCount}`)
         }
+
+        const result = await response.json()
+
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to load page')
+        }
+
+        // Process page data
+        const pageData = result.data?.warehouse_products?.data
+        const edges = pageData?.edges || []
         
-        throw new Error(errorData.error || `Server error ${response.status}`)
+        console.log(`✅ Page ${pageCount}: ${edges.length} products, complexity: ${result.meta?.complexity}`)
+
+        // Transform products to flat items
+        edges.forEach(({ node: product }: any) => {
+          const locationEdges = product.locations?.edges || []
+          
+          locationEdges.forEach(({ node: itemLoc }: any) => {
+            if (itemLoc.quantity > 0) {
+              allItems.push({
+                sku: product.sku,
+                productName: product.product?.name || product.sku,
+                quantity: itemLoc.quantity,
+                location: itemLoc.location?.name || 'Unknown',
+                zone: itemLoc.location?.name?.split('-')[0] || 'Zone',
+                pickable: itemLoc.location?.pickable || false,
+                sellable: itemLoc.location?.sellable || false,
+                warehouse: product.warehouse_identifier,
+                type: 'Bin',
+                barcode: product.product?.barcode || ''
+              })
+            }
+          })
+        })
+
+        // Update UI with current data
+        setFlatInventory([...allItems])
+
+        hasNextPage = pageData?.pageInfo?.hasNextPage || false
+        cursor = pageData?.pageInfo?.endCursor || null
+
+        // Small delay between pages
+        if (hasNextPage) {
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
       }
 
-      const result = await response.json()
-      console.log('📦 Inventory items received:', result.data?.length || 0)
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to load inventory')
-      }
-
-      // Data is already in the correct format from API
-      const flatData: FlatInventoryItem[] = result.data
-
-      setFlatInventory(flatData)
+      console.log(`🎉 Complete! ${allItems.length} items from ${pageCount} pages`)
       
       toast({
         title: 'Inventory loaded',
-        description: `${flatData.length} inventory items loaded for ${selectedCustomer?.name || 'customer'}`,
+        description: `${allItems.length} items loaded from ${pageCount} pages`,
       })
-
-      console.log('🎉 SUCCESS! Loaded', flatData.length, 'inventory items')
 
     } catch (error: any) {
       console.error('💥 Error:', error)
