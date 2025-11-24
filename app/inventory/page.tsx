@@ -23,7 +23,7 @@ interface FlatInventoryItem {
   type: string
 }
 
-type SortField = 'warehouse' | 'location' | 'sku' | 'productName' | 'quantity' | 'zone'
+type SortField = 'warehouse' | 'location' | 'sku' | 'productName' | 'quantity' | 'zone' | 'pickable' | 'sellable'
 
 interface ColumnFilters {
   productName: boolean
@@ -47,6 +47,8 @@ interface InventorySummary {
 
 export default function InventoryPage() {
   const [isLoading, setIsLoading] = useState(false)
+  const [loadingPage, setLoadingPage] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
   const [flatInventory, setFlatInventory] = useState<FlatInventoryItem[]>([])
   const [sortField, setSortField] = useState<SortField>('warehouse')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
@@ -300,6 +302,10 @@ export default function InventoryPage() {
       if (field === 'quantity') {
         aVal = Number(aVal)
         bVal = Number(bVal)
+      } else if (field === 'pickable' || field === 'sellable') {
+        // Sort boolean fields
+        aVal = a[field] ? 1 : 0
+        bVal = b[field] ? 1 : 0
       } else {
         aVal = String(aVal).toLowerCase()
         bVal = String(bVal).toLowerCase()
@@ -569,10 +575,18 @@ export default function InventoryPage() {
       )}
 
       {isLoading && flatInventory.length > 0 && (
-        <div className="mb-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-          <p className="text-sm text-blue-800 dark:text-blue-200">
-            Loading more data... ({flatInventory.length} records loaded so far)
-          </p>
+        <div className="mb-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+          <div className="flex items-center gap-3">
+            <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
+            <div>
+              <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                Loading page {loadingPage}...
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                {flatInventory.length} records loaded so far
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -639,8 +653,16 @@ export default function InventoryPage() {
                         Units {getSortIcon('quantity')}
                       </Button>
                     </th>
-                    <th className="px-4 py-3 text-center">Pickable</th>
-                    <th className="px-4 py-3 text-center">Sellable</th>
+                    <th className="px-4 py-3 text-center">
+                      <Button variant="ghost" className="h-auto p-0 font-semibold hover:bg-transparent" onClick={() => sortData('pickable')}>
+                        Pickable {getSortIcon('pickable')}
+                      </Button>
+                    </th>
+                    <th className="px-4 py-3 text-center">
+                      <Button variant="ghost" className="h-auto p-0 font-semibold hover:bg-transparent" onClick={() => sortData('sellable')}>
+                        Sellable {getSortIcon('sellable')}
+                      </Button>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -656,18 +678,14 @@ export default function InventoryPage() {
                       <td className="px-4 py-3 text-sm">{item.type}</td>
                       <td className="px-4 py-3 font-semibold text-lg">{item.quantity}</td>
                       <td className="px-4 py-3 text-center">
-                        {item.pickable && (
-                          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 dark:bg-green-900/30">
-                            <span className="text-green-600 dark:text-green-400">✓</span>
-                          </span>
-                        )}
+                        <span className={item.pickable ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-400'}>
+                          {item.pickable ? 'Yes' : 'No'}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        {item.sellable && (
-                          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 dark:bg-green-900/30">
-                            <span className="text-green-600 dark:text-green-400">✓</span>
-                          </span>
-                        )}
+                        <span className={item.sellable ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-400'}>
+                          {item.sellable ? 'Yes' : 'No'}
+                        </span>
                       </td>
                     </tr>
                   ))}
