@@ -16,57 +16,106 @@ export async function POST(request: NextRequest) {
 
     console.log('=== LOCATION SYNC JOB STARTED ===')
 
-    // Simple locations query - gets ALL locations for caching
-    const query = `
-      query {
-        locations {
-          request_id
-          complexity
-          data {
-            edges {
-              node {
-                id
-                name
-                sellable
-                pickable
-                warehouse_id
+    // Get ALL locations using pagination on warehouse_products query
+    // This is a workaround since locations query doesn't support pagination
+    console.log('Fetching ALL locations via warehouse_products...')
+    
+    const allLocations = new Map() // Use Map to deduplicate locations
+    let cursor: string | null = null
+    let hasMore = true
+    let pageCount = 0
+
+    while (hasMore && pageCount < 100) {
+      pageCount++
+      
+      const query = `
+        query ($cursor: String) {
+          warehouse_products(active: true) {
+            complexity
+            data(first: 50, after: $cursor) {
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+              edges {
+                node {
+                  locations(first: 50) {
+                    edges {
+                      node {
+                        location {
+                          id
+                          name
+                          sellable
+                          pickable
+                          warehouse_id
+                        }
+                      }
+                    }
+                  }
+                }
               }
             }
           }
         }
+      `;
+
+      const response = await fetch('https://public-api.shiphero.com/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ 
+          query,
+          variables: { cursor }
+        })
+      });
+
+      if (!response.ok) {
+        const text = await response.text()
+        console.error('ShipHero error:', text.substring(0, 500))
+        return NextResponse.json({ 
+          success: false, 
+          error: `HTTP ${response.status} on page ${pageCount}`
+        }, { status: 500 });
       }
-    `;
 
-    const response = await fetch('https://public-api.shiphero.com/graphql', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({ query })
-    });
+      const result = await response.json()
 
-    if (!response.ok) {
-      const text = await response.text()
-      console.error('ShipHero error:', text.substring(0, 500))
-      return NextResponse.json({ 
-        success: false, 
-        error: `HTTP ${response.status}`
-      }, { status: 500 });
+      if (result.errors) {
+        console.error('GraphQL errors:', result.errors)
+        return NextResponse.json({ 
+          success: false, 
+          error: result.errors[0].message
+        }, { status: 500 });
+      }
+
+      const products = result.data?.warehouse_products?.data?.edges || []
+      
+      // Extract unique locations from all products
+      products.forEach(({ node: product }: any) => {
+        const locationEdges = product.locations?.edges || []
+        locationEdges.forEach(({ node: itemLoc }: any) => {
+          const loc = itemLoc.location
+          if (loc && loc.id && !allLocations.has(loc.id)) {
+            allLocations.set(loc.id, loc)
+          }
+        })
+      })
+
+      console.log(`Page ${pageCount}: ${allLocations.size} unique locations so far, complexity: ${result.data?.warehouse_products?.complexity}`)
+
+      hasMore = result.data?.warehouse_products?.data?.pageInfo?.hasNextPage || false
+      cursor = result.data?.warehouse_products?.data?.pageInfo?.endCursor
+
+      // Pause between pages
+      if (hasMore) {
+        await new Promise(resolve => setTimeout(resolve, 2000))
+      }
     }
 
-    const result = await response.json()
-
-    if (result.errors) {
-      console.error('GraphQL errors:', result.errors)
-      return NextResponse.json({ 
-        success: false, 
-        error: result.errors[0].message
-      }, { status: 500 });
-    }
-
-    const locations = result.data?.locations?.data?.edges?.map(({ node }: any) => node) || []
-    console.log(`✅ Fetched ${locations.length} locations from ShipHero`)
+    const locations = Array.from(allLocations.values())
+    console.log(`✅ Fetched ${locations.length} unique locations total from ${pageCount} pages`)
 
     // Save to Supabase
     const { supabaseAdmin } = await import('@/lib/supabase')
