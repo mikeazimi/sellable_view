@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
               node {
                 name
                 warehouse_id
+                warehouse_identifier
                 pickable
                 sellable
                 inventory(first: 100) {

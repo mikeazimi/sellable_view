@@ -177,23 +177,6 @@ export default function InventoryPage() {
       let cursor: string | null = null
       let pageCount = 0
 
-      // Get warehouse mapping once
-      const whResponse = await fetch('https://public-api.shiphero.com/graphql', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`
-        },
-        body: JSON.stringify({ 
-          query: `query { account { data { warehouses { id identifier } } } }` 
-        })
-      })
-      const whResult = await whResponse.json()
-      const warehouseMap = new Map()
-      whResult.data?.account?.data?.warehouses?.forEach((wh: any) => {
-        warehouseMap.set(wh.id, wh.identifier)
-      })
-
       while (hasNextPage && pageCount < 50) {
         pageCount++
         
@@ -248,7 +231,7 @@ export default function InventoryPage() {
                 zone: location.name?.split('-')[0] || 'Zone',
                 pickable: location.pickable,
                 sellable: location.sellable,
-                warehouse: warehouseMap.get(location.warehouse_id) || 'Unknown',
+                warehouse: location.warehouse_identifier || 'Unknown',
                 type: 'Bin',
                 barcode: ''
               })
