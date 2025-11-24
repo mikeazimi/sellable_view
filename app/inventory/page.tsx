@@ -251,7 +251,15 @@ export default function InventoryPage() {
         cursor = warehouseData?.pageInfo?.endCursor || null
 
         if (hasNextPage) {
-          await new Promise(resolve => setTimeout(resolve, 1000))
+          // Optimal pause strategy for credit conservation
+          if (pageCount % 5 === 0) {
+            // Every 5th page: 3 second pause
+            console.log(`⏸️  Extended pause after page ${pageCount} (3s)...`)
+            await new Promise(resolve => setTimeout(resolve, 3000))
+          } else {
+            // Regular: 1 second pause
+            await new Promise(resolve => setTimeout(resolve, 1000))
+          }
         }
       }
 
