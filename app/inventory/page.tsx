@@ -171,7 +171,40 @@ export default function InventoryPage() {
         console.log(`Converted ${customerAccountId} to UUID: ${accountIdToUse}`)
       }
       
-      console.log('🚀 Loading with filters from Supabase cache')
+      console.log('🚀 Loading from Supabase cache (NOT ShipHero!)')
+      
+      // Try Supabase first
+      const supabaseParams = new URLSearchParams({
+        customer_account_id: accountIdToUse,
+        sellable: preLoadFilters.sellable,
+        pickable: preLoadFilters.pickable
+      })
+      
+      const supabaseResponse = await fetch(`/api/inventory/supabase?${supabaseParams.toString()}`)
+      const supabaseResult = await supabaseResponse.json()
+      
+      if (supabaseResult.success) {
+        // SUCCESS - Got data from Supabase!
+        console.log(`✅ Loaded ${supabaseResult.data.length} records from Supabase (instant!)`)
+        
+        setFlatInventory(supabaseResult.data)
+        
+        toast({
+          title: 'Inventory loaded from cache',
+          description: `${supabaseResult.data.length} records loaded instantly from Supabase`,
+        })
+        
+        return // Done - no ShipHero query needed!
+      }
+      
+      if (supabaseResult.empty_database) {
+        // Database is empty - show error
+        throw new Error('No inventory data cached. Please run snapshot sync in Admin page first.')
+      }
+      
+      // If we get here, there was an error - fall through to ShipHero query as backup
+      console.warn('Supabase query failed, falling back to ShipHero:', supabaseResult.error)
+      console.log('🔄 Falling back to real-time ShipHero query...')
       
       // Step 1: Get filtered location names from Supabase (INSTANT!)
       let allowedLocations: Set<string> | null = null

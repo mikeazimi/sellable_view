@@ -43,9 +43,14 @@ export async function POST(request: NextRequest) {
     });
 
     const result = await response.json()
+    
+    console.log('Full status response:', JSON.stringify(result, null, 2))
+    
     const snapshot = result.data?.inventory_snapshot?.snapshot
 
-    console.log('Status:', snapshot?.status)
+    console.log('Snapshot status:', snapshot?.status)
+    console.log('Snapshot URL:', snapshot?.snapshot_url || 'Not ready yet')
+    console.log('Error:', snapshot?.error || 'None')
 
     if (snapshot?.status === 'error') {
       throw new Error(`Snapshot failed: ${snapshot.error}`)
