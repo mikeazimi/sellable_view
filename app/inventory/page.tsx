@@ -68,15 +68,7 @@ export default function InventoryPage() {
   })
   const { toast } = useToast()
 
-  // Calculate real-time summaries based on current data and filters
-  const summary: InventorySummary = {
-    totalSkus: new Set(filteredInventory.map(item => item.sku)).size,
-    totalQtySellable: filteredInventory.filter(item => item.sellable).reduce((sum, item) => sum + item.quantity, 0),
-    totalQtyNonSellable: filteredInventory.filter(item => !item.sellable).reduce((sum, item) => sum + item.quantity, 0),
-    skusNonSellable: new Set(filteredInventory.filter(item => !item.sellable).map(item => item.sku)).size,
-  }
-
-  // Apply status filters
+  // Apply status filters FIRST
   const filteredInventory = flatInventory.filter(item => {
     if (statusFilters.sellable === 'sellable' && !item.sellable) return false
     if (statusFilters.sellable === 'non-sellable' && item.sellable) return false
@@ -84,6 +76,14 @@ export default function InventoryPage() {
     if (statusFilters.pickable === 'non-pickable' && item.pickable) return false
     return true
   })
+
+  // Calculate real-time summaries based on filtered data
+  const summary: InventorySummary = {
+    totalSkus: new Set(filteredInventory.map(item => item.sku)).size,
+    totalQtySellable: filteredInventory.filter(item => item.sellable).reduce((sum, item) => sum + item.quantity, 0),
+    totalQtyNonSellable: filteredInventory.filter(item => !item.sellable).reduce((sum, item) => sum + item.quantity, 0),
+    skusNonSellable: new Set(filteredInventory.filter(item => !item.sellable).map(item => item.sku)).size,
+  }
 
   useEffect(() => {
     const authenticated = AuthManager.isAuthenticated()
