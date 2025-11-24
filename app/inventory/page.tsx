@@ -453,28 +453,17 @@ export default function InventoryPage() {
             {/* Customer Account ID Input */}
             <div>
               <h3 className="font-semibold mb-2">Customer Account ID</h3>
-              <p className="text-sm text-gray-500 mb-3">Enter the customer account UUID (e.g., Q3VzdG9tZXJBY2NvdW50Ojg4Nzc0 for Donni HQ)</p>
+              <p className="text-sm text-gray-500 mb-3">Enter the account ID number (e.g., 88774 for Donni HQ)</p>
               <Input
                 type="text"
                 value={customerAccountId}
                 onChange={(e) => setCustomerAccountId(e.target.value)}
-                placeholder="Q3VzdG9tZXJBY2NvdW50Ojg4Nzc0"
-                className="w-full md:w-96 font-mono"
+                placeholder="88774"
+                className="w-full md:w-96"
               />
-              {availableCustomers.length > 0 && (
-                <div className="mt-2 text-sm text-gray-500">
-                  <span className="font-medium">Quick select:</span>
-                  {availableCustomers.map((customer, idx) => (
-                    <button
-                      key={customer.id}
-                      onClick={() => setCustomerAccountId(customer.id)}
-                      className="ml-2 text-blue-600 hover:underline"
-                    >
-                      {customer.name}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <p className="text-xs text-gray-500 mt-2">
+                Just type the numeric ID - we'll handle the conversion automatically
+              </p>
             </div>
 
             {/* Column Filters */}
