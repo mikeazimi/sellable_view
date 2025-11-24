@@ -230,11 +230,17 @@ export default function InventoryPage() {
         
         console.log(`✅ Page ${pageCount}: ${edges.length} products, complexity: ${result.meta?.complexity}`)
 
-        // Transform products to flat items
+        // Transform products to flat items - apply pre-load filters here
         edges.forEach(({ node: product }: any) => {
           const locationEdges = product.locations?.edges || []
           
           locationEdges.forEach(({ node: itemLoc }: any) => {
+            // Apply pre-load filters
+            if (preLoadFilters.sellable === 'sellable' && !itemLoc.location?.sellable) return
+            if (preLoadFilters.sellable === 'non-sellable' && itemLoc.location?.sellable) return
+            if (preLoadFilters.pickable === 'pickable' && !itemLoc.location?.pickable) return
+            if (preLoadFilters.pickable === 'non-pickable' && itemLoc.location?.pickable) return
+            
             if (itemLoc.quantity > 0) {
               allItems.push({
                 sku: product.sku,

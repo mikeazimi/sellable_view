@@ -11,13 +11,10 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const customerAccountId = searchParams.get("customer_account_id")
     const cursor = searchParams.get("cursor") || null
-    const filterSellable = searchParams.get("filter_sellable") || 'all'
-    const filterPickable = searchParams.get("filter_pickable") || 'all'
     
-    console.log('=== INVENTORY API (Pre-Filtered) ===')
+    console.log('=== INVENTORY API (Single Page) ===')
     console.log('Customer ID:', customerAccountId)
     console.log('Cursor:', cursor ? cursor.substring(0, 20) + '...' : 'null (first page)')
-    console.log('Pre-filters:', { sellable: filterSellable, pickable: filterPickable })
 
     if (!accessToken) {
       return NextResponse.json({ success: false, error: "Auth required" }, { status: 401 });
@@ -27,7 +24,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: "customer_account_id required" }, { status: 400 });
     }
 
-    // Fetch all locations, filter server-side after (locations field doesn't accept filter args)
+    // Clean query - client will filter the results
     const query = `
       query ($customer_account_id: String, $cursor: String) {
         warehouse_products(
@@ -66,8 +63,6 @@ export async function GET(request: NextRequest) {
         }
       }
     `;
-    
-    console.log('Will filter sellable/pickable server-side after fetch')
 
     const variables = {
       customer_account_id: customerAccountId,
@@ -106,50 +101,15 @@ export async function GET(request: NextRequest) {
       }, { status: 500 });
     }
 
-    // Apply server-side filters to reduce data sent to client
-    const rawData = result.data
-    
-    if (filterSellable !== 'all' || filterPickable !== 'all') {
-      console.log('Applying server-side filters...')
-      
-      const edges = rawData?.warehouse_products?.data?.edges || []
-      const filteredEdges = edges.map((edge: any) => {
-        const product = edge.node
-        const locationEdges = product.locations?.edges || []
-        
-        // Filter locations based on sellable/pickable
-        const filteredLocationEdges = locationEdges.filter(({ node: itemLoc }: any) => {
-          if (filterSellable === 'sellable' && !itemLoc.location?.sellable) return false
-          if (filterSellable === 'non-sellable' && itemLoc.location?.sellable) return false
-          if (filterPickable === 'pickable' && !itemLoc.location?.pickable) return false
-          if (filterPickable === 'non-pickable' && itemLoc.location?.pickable) return false
-          return true
-        })
-        
-        return {
-          ...edge,
-          node: {
-            ...product,
-            locations: {
-              edges: filteredLocationEdges
-            }
-          }
-        }
-      })
-      
-      // Update the data with filtered locations
-      rawData.warehouse_products.data.edges = filteredEdges
-      
-      console.log(`✅ Filtered server-side - reduced data transfer`)
-    }
+    // Return full data - client will filter
+    console.log('✅ Returning page data')
     
     return NextResponse.json({
       success: true,
-      data: rawData,
+      data: result.data,
       meta: {
-        complexity: rawData?.warehouse_products?.complexity,
-        request_id: rawData?.warehouse_products?.request_id,
-        filters_applied: filterSellable !== 'all' || filterPickable !== 'all'
+        complexity: result.data?.warehouse_products?.complexity,
+        request_id: result.data?.warehouse_products?.request_id
       }
     });
 
