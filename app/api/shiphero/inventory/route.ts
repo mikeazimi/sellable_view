@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
         ) {
           request_id
           complexity
-          data(first: 50, after: $cursor) {
+          data(first: 40, after: $cursor) {
             pageInfo {
               hasNextPage
               endCursor
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
                   name
                   barcode
                 }
-                locations(first: 50) {
+                locations(first: 40) {
                   edges {
                     node {
                       quantity

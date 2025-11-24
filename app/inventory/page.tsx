@@ -133,15 +133,20 @@ export default function InventoryPage() {
           })
         })
 
-        // Update UI with current data
+        // Update UI immediately with current data - user sees results right away!
         setFlatInventory([...allItems])
 
         hasNextPage = pageData?.pageInfo?.hasNextPage || false
         cursor = pageData?.pageInfo?.endCursor || null
 
-        // Small delay between pages
+        // Pause between pages - longer pause every 10 pages to conserve credits
         if (hasNextPage) {
-          await new Promise(resolve => setTimeout(resolve, 500))
+          if (pageCount % 10 === 0) {
+            console.log(`⏸️  Pausing 3 seconds after page ${pageCount}...`)
+            await new Promise(resolve => setTimeout(resolve, 3000))
+          } else {
+            await new Promise(resolve => setTimeout(resolve, 500))
+          }
         }
       }
 
@@ -268,6 +273,14 @@ export default function InventoryPage() {
           )}
         </div>
       </div>
+
+      {isLoading && flatInventory.length > 0 && (
+        <div className="mb-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+          <p className="text-sm text-blue-800 dark:text-blue-200">
+            Loading more data... ({flatInventory.length} items loaded so far)
+          </p>
+        </div>
+      )}
 
       {!isAuthenticated ? (
         <Card className="border-amber-200 bg-amber-50/20 dark:bg-amber-950/20">
