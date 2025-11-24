@@ -7,19 +7,18 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const customerAccountId = searchParams.get("customer_account_id")
 
-    console.log('=== INVENTORY API (Paginated) ===')
+    console.log('=== INVENTORY API (Reduced Complexity) ===')
 
     if (!accessToken || !customerAccountId) {
-      return NextResponse.json({ success: false, error: "Auth and customer_account_id required" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Auth required" }, { status: 400 });
     }
 
-    // Paginated query to stay under complexity limit (4004 credits)
+    // Reduced complexity query - NO locations to start, just basic inventory
     const query = `
-      query ($customer_account_id: String, $after: String) {
+      query ($customer_account_id: String) {
         warehouse_products(
           customer_account_id: $customer_account_id
           active: true
-          after: $after
         ) {
           request_id
           complexity
@@ -32,148 +31,80 @@ export async function GET(request: NextRequest) {
                 inventory_bin
                 product {
                   name
-                  barcode
-                }
-                locations {
-                  edges {
-                    node {
-                      quantity
-                      location {
-                        id
-                        name
-                        pickable
-                        sellable
-                      }
-                    }
-                  }
                 }
               }
-              cursor
-            }
-            pageInfo {
-              hasNextPage
-              endCursor
             }
           }
         }
       }
     `;
 
-    console.log('📤 Fetching with pagination for customer:', customerAccountId)
+    const variables = { customer_account_id: customerAccountId }
 
-    const allProducts: any[] = []
-    let hasNextPage = true
-    let afterCursor: string | undefined = undefined
-    let pageCount = 0
-    const maxPages = 50
+    console.log('📤 Simple query without locations')
 
-    while (hasNextPage && pageCount < maxPages) {
-      pageCount++
-      
-      const variables = {
-        customer_account_id: customerAccountId,
-        after: afterCursor
-      }
+    const response = await fetch('https://public-api.shiphero.com/graphql', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({ query, variables })
+    });
 
-      console.log(`📄 Page ${pageCount}`)
+    console.log('📥 Status:', response.status)
 
-      const response = await fetch('https://public-api.shiphero.com/graphql', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`
-        },
-        body: JSON.stringify({ query, variables })
-      });
-
-      if (!response.ok) {
-        const text = await response.text()
-        console.error('HTTP error:', text.substring(0, 500))
-        return NextResponse.json({ 
-          success: false, 
-          error: `HTTP ${response.status}`,
-          details: text.substring(0, 500)
-        }, { status: 500 });
-      }
-
-      const result = await response.json()
-
-      if (result.errors) {
-        console.error('GraphQL errors:', result.errors)
-        return NextResponse.json({ 
-          success: false, 
-          error: result.errors[0].message,
-          errors: result.errors
-        }, { status: 500 });
-      }
-
-      const edges = result.data?.warehouse_products?.data?.edges || []
-      const pageProducts = edges.map(({ node }: any) => node)
-      
-      console.log(`✅ Page ${pageCount}: ${edges.length} products, complexity: ${result.data.warehouse_products.complexity}`)
-      
-      allProducts.push(...pageProducts)
-
-      hasNextPage = result.data?.warehouse_products?.data?.pageInfo?.hasNextPage || false
-      afterCursor = result.data?.warehouse_products?.data?.pageInfo?.endCursor
-
-      // Delay between pages
-      if (hasNextPage) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-      }
+    if (!response.ok) {
+      const text = await response.text()
+      console.error('Error:', text.substring(0, 500))
+      return NextResponse.json({ 
+        success: false, 
+        error: `HTTP ${response.status}`,
+        details: text.substring(0, 500)
+      }, { status: 500 });
     }
 
-    console.log(`📦 Total products: ${allProducts.length}`)
+    const result = await response.json()
 
-    // Transform to items
-    const items: any[] = []
+    if (result.errors) {
+      console.error('Errors:', result.errors)
+      return NextResponse.json({ 
+        success: false, 
+        error: result.errors[0].message,
+        errors: result.errors
+      }, { status: 500 });
+    }
 
-    allProducts.forEach((product: any) => {
-      const locationEdges = product.locations?.edges || []
-      
-      locationEdges.forEach(({ node: itemLoc }: any) => {
-        if (itemLoc.quantity > 0) {
-          items.push({
-            sku: product.sku,
-            productName: product.product?.name || product.sku,
-            quantity: itemLoc.quantity,
-            location: itemLoc.location?.name || 'Unknown',
-            locationId: itemLoc.location?.id || 'unknown',
-            zone: itemLoc.location?.name?.split('-')[0] || 'Zone',
-            pickable: itemLoc.location?.pickable || false,
-            sellable: itemLoc.location?.sellable || false,
-            warehouse: product.warehouse_identifier,
-            type: 'Bin',
-            barcode: product.product?.barcode
-          })
-        }
-      })
-      
-      if (locationEdges.length === 0 && product.on_hand > 0) {
-        items.push({
-          sku: product.sku,
-          productName: product.product?.name || product.sku,
-          quantity: product.on_hand,
-          location: product.inventory_bin || 'General',
-          locationId: 'general',
-          zone: 'General',
-          pickable: true,
-          sellable: true,
-          warehouse: product.warehouse_identifier,
-          type: 'Bin',
-          barcode: product.product?.barcode
-        })
-      }
-    })
+    console.log('Complexity:', result.data?.warehouse_products?.complexity)
 
-    console.log(`🎉 Final items: ${items.length}`)
+    const products = result.data?.warehouse_products?.data?.edges?.map(({ node }: any) => node) || []
+    console.log(`✅ Products: ${products.length}`)
+
+    // Transform to items - use inventory_bin since we're not querying locations
+    const items = products
+      .filter((p: any) => p.on_hand > 0)
+      .map((product: any) => ({
+        sku: product.sku,
+        productName: product.product?.name || product.sku,
+        quantity: product.on_hand,
+        location: product.inventory_bin || 'General Stock',
+        locationId: product.inventory_bin || 'general',
+        zone: product.inventory_bin?.split('-')[0] || 'General',
+        pickable: true,
+        sellable: true,
+        warehouse: product.warehouse_identifier,
+        type: 'Bin',
+        barcode: ''
+      }))
+
+    console.log(`🎉 Items: ${items.length}`)
 
     return NextResponse.json({
       success: true,
       data: items,
       meta: { 
         total: items.length,
-        pages: pageCount
+        complexity: result.data?.warehouse_products?.complexity
       },
     });
   } catch (error: any) {
