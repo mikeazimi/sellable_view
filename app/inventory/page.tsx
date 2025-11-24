@@ -139,13 +139,15 @@ export default function InventoryPage() {
         hasNextPage = pageData?.pageInfo?.hasNextPage || false
         cursor = pageData?.pageInfo?.endCursor || null
 
-        // Pause between pages - longer pause every 10 pages to conserve credits
+        // Pause between pages for credit conservation
         if (hasNextPage) {
           if (pageCount % 10 === 0) {
-            console.log(`⏸️  Pausing 3 seconds after page ${pageCount}...`)
-            await new Promise(resolve => setTimeout(resolve, 3000))
+            // Every 10th page: 2s + 5s = 7s total pause
+            console.log(`⏸️  Extended pause after page ${pageCount} (7 seconds total)...`)
+            await new Promise(resolve => setTimeout(resolve, 7000))
           } else {
-            await new Promise(resolve => setTimeout(resolve, 500))
+            // Regular pause: 2 seconds
+            await new Promise(resolve => setTimeout(resolve, 2000))
           }
         }
       }
