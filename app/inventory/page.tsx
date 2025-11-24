@@ -33,6 +33,18 @@ interface ColumnFilters {
   sellable: boolean
 }
 
+interface StatusFilter {
+  sellable: 'all' | 'sellable' | 'non-sellable'
+  pickable: 'all' | 'pickable' | 'non-pickable'
+}
+
+interface InventorySummary {
+  totalSkus: number
+  totalQtySellable: number
+  totalQtyNonSellable: number
+  skusNonSellable: number
+}
+
 export default function InventoryPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [flatInventory, setFlatInventory] = useState<FlatInventoryItem[]>([])
@@ -50,7 +62,28 @@ export default function InventoryPage() {
     pickable: true,
     sellable: true,
   })
+  const [statusFilters, setStatusFilters] = useState<StatusFilter>({
+    sellable: 'all',
+    pickable: 'all'
+  })
   const { toast } = useToast()
+
+  // Calculate real-time summaries based on current data and filters
+  const summary: InventorySummary = {
+    totalSkus: new Set(filteredInventory.map(item => item.sku)).size,
+    totalQtySellable: filteredInventory.filter(item => item.sellable).reduce((sum, item) => sum + item.quantity, 0),
+    totalQtyNonSellable: filteredInventory.filter(item => !item.sellable).reduce((sum, item) => sum + item.quantity, 0),
+    skusNonSellable: new Set(filteredInventory.filter(item => !item.sellable).map(item => item.sku)).size,
+  }
+
+  // Apply status filters
+  const filteredInventory = flatInventory.filter(item => {
+    if (statusFilters.sellable === 'sellable' && !item.sellable) return false
+    if (statusFilters.sellable === 'non-sellable' && item.sellable) return false
+    if (statusFilters.pickable === 'pickable' && !item.pickable) return false
+    if (statusFilters.pickable === 'non-pickable' && item.pickable) return false
+    return true
+  })
 
   useEffect(() => {
     const authenticated = AuthManager.isAuthenticated()
@@ -330,7 +363,7 @@ export default function InventoryPage() {
                 </Badge>
               </span>
             )}
-            {flatInventory.length > 0 && ` ${flatInventory.length} items`}
+            {flatInventory.length > 0 && ` ${filteredInventory.length} items`}
           </p>
         </div>
         <div className="flex gap-2">
@@ -348,6 +381,73 @@ export default function InventoryPage() {
           )}
         </div>
       </div>
+
+      {/* Summary Stats */}
+      {flatInventory.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm text-gray-500">Total SKUs</div>
+              <div className="text-2xl font-bold">{summary.totalSkus}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm text-gray-500">Qty Sellable</div>
+              <div className="text-2xl font-bold text-green-600">{summary.totalQtySellable}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm text-gray-500">Qty Non-Sellable</div>
+              <div className="text-2xl font-bold text-amber-600">{summary.totalQtyNonSellable}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm text-gray-500">SKUs Non-Sellable</div>
+              <div className="text-2xl font-bold text-amber-600">{summary.skusNonSellable}</div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Status Filters */}
+      {flatInventory.length > 0 && (
+        <Card className="mb-4">
+          <CardContent className="p-4">
+            <div className="flex flex-wrap gap-4 items-center">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Sellable:</span>
+                <select
+                  value={statusFilters.sellable}
+                  onChange={(e) => setStatusFilters(prev => ({ ...prev, sellable: e.target.value as any }))}
+                  className="px-3 py-1 border rounded text-sm"
+                >
+                  <option value="all">All</option>
+                  <option value="sellable">Sellable Only</option>
+                  <option value="non-sellable">Non-Sellable Only</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Pickable:</span>
+                <select
+                  value={statusFilters.pickable}
+                  onChange={(e) => setStatusFilters(prev => ({ ...prev, pickable: e.target.value as any }))}
+                  className="px-3 py-1 border rounded text-sm"
+                >
+                  <option value="all">All</option>
+                  <option value="pickable">Pickable Only</option>
+                  <option value="non-pickable">Non-Pickable Only</option>
+                </select>
+              </div>
+              <div className="text-sm text-gray-500">
+                Showing {filteredInventory.length} of {flatInventory.length} items
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters Card */}
       {isAuthenticated && flatInventory.length === 0 && !isLoading && (
@@ -519,7 +619,7 @@ export default function InventoryPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {flatInventory.map((item, idx) => (
+                  {filteredInventory.map((item, idx) => (
                     <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 border-b">
                       <td className="px-4 py-3">
                         <div className="font-medium">{item.productName}</div>

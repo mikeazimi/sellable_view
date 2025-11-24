@@ -60,10 +60,10 @@ export function SidebarLayout({ children }: SidebarLayoutProps) {
             </div>
             <div>
               <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Sellable View
+                Inventory View
               </h1>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Inventory Management
+                ShipHero 3PL
               </p>
             </div>
           </div>
@@ -117,24 +117,6 @@ export function SidebarLayout({ children }: SidebarLayoutProps) {
           </div>
         </nav>
 
-        {/* Bottom section */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 dark:border-gray-700">
-          <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-            <div className="p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
-                  <Package className="w-3 h-3 text-white" />
-                </div>
-              <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                ShipHero API
-              </span>
-              </div>
-              <p className="text-xs text-blue-700 dark:text-blue-300">
-                Connected via API
-              </p>
-            </div>
-          </Card>
-        </div>
       </div>
 
       {/* Main content */}

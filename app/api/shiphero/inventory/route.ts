@@ -33,22 +33,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: "customer_account_id required" }, { status: 400 });
     }
 
-    // Build dynamic query based on selected columns - reduces complexity!
-    const productFields = includeProductName || includeBarcode
-      ? `product {
-          ${includeProductName ? 'name' : ''}
-          ${includeBarcode ? 'barcode' : ''}
-        }`
-      : ''
-
-    const locationFields = includeLocation || includePickable || includeSellable
-      ? `location {
-          ${includeLocation ? 'name' : ''}
-          ${includePickable ? 'pickable' : ''}
-          ${includeSellable ? 'sellable' : ''}
-        }`
-      : ''
-
+    // Minimal optimized query - only essential fields
     const query = `
       query ($customer_account_id: String, $cursor: String) {
         warehouse_products(
@@ -65,13 +50,19 @@ export async function GET(request: NextRequest) {
             edges {
               node {
                 sku
-                ${includeWarehouse ? 'warehouse_identifier' : ''}
-                ${productFields}
+                warehouse_identifier
+                product {
+                  name
+                }
                 locations(first: 40) {
                   edges {
                     node {
                       quantity
-                      ${locationFields}
+                      location {
+                        name
+                        pickable
+                        sellable
+                      }
                     }
                   }
                 }
