@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Upload, CheckCircle, AlertCircle, Database, RefreshCw } from 'lucide-react'
+import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
 import { AuthManager } from '@/lib/auth-manager'
 import Papa from 'papaparse'
@@ -15,6 +16,7 @@ export default function AdminPage() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isSyncingInventory, setIsSyncingInventory] = useState(false)
   const [inventorySyncResult, setInventorySyncResult] = useState<any>(null)
+  const [snapshotCustomerId, setSnapshotCustomerId] = useState('88774')
   const { toast} = useToast()
 
   const runInventorySync = async () => {
@@ -29,17 +31,35 @@ export default function AdminPage() {
       return
     }
 
+    if (!snapshotCustomerId) {
+      toast({
+        title: 'Customer ID required',
+        description: 'Please enter a customer account ID',
+        variant: 'destructive',
+      })
+      return
+    }
+
     setIsSyncingInventory(true)
     setInventorySyncResult(null)
 
     try {
-      console.log('Starting inventory snapshot sync...')
+      console.log('Starting inventory snapshot sync for customer:', snapshotCustomerId)
+      
+      // Convert to UUID if needed
+      let accountId = snapshotCustomerId.trim()
+      if (/^\d+$/.test(accountId)) {
+        accountId = btoa(`CustomerAccount:${accountId}`)
+        console.log('Converted to UUID:', accountId)
+      }
       
       const response = await fetch('/api/sync/inventory-snapshot', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ customer_account_id: accountId })
       })
 
       const result = await response.json()
@@ -327,16 +347,33 @@ export default function AdminPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-            <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
-              Full Inventory Sync
-            </h3>
-            <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
-              <li>• Generates complete inventory snapshot from ShipHero</li>
-              <li>• Takes 5-10 minutes (polls until ready)</li>
-              <li>• Syncs ALL SKUs with locations and quantities</li>
-              <li>• Run manually or scheduled nightly at 2 AM</li>
-            </ul>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium mb-2">Customer Account ID</label>
+              <Input
+                type="text"
+                value={snapshotCustomerId}
+                onChange={(e) => setSnapshotCustomerId(e.target.value)}
+                placeholder="88774"
+                className="w-full"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Enter the account ID to sync (e.g., 88774 for Donni HQ)
+              </p>
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                What This Does
+              </h3>
+              <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                <li>• Generates complete inventory snapshot from ShipHero</li>
+                <li>• Takes 5-10 minutes (snapshot generation + download)</li>
+                <li>• Syncs ALL SKUs with locations and quantities to Supabase</li>
+                <li>• After sync: Query Supabase instead of ShipHero (instant!)</li>
+                <li>• Automatic: Runs nightly at 2 AM via Vercel Cron</li>
+              </ul>
+            </div>
           </div>
 
           <Button 

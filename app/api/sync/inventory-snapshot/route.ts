@@ -9,17 +9,22 @@ export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization')
     const accessToken = authHeader?.replace('Bearer ', '')
+    const body = await request.json().catch(() => ({}))
+    const customerAccountId = body.customer_account_id || null
 
     if (!accessToken) {
       return NextResponse.json({ success: false, error: "Auth required" }, { status: 401 });
     }
 
     console.log('=== INVENTORY SNAPSHOT SYNC STARTED ===')
+    console.log('Customer Account ID:', customerAccountId || 'All customers')
 
-    // Step 1: Request snapshot generation
+    // Step 1: Request snapshot generation (with optional customer filter)
     const generateMutation = `
-      mutation {
-        inventory_generate_snapshot(data: {}) {
+      mutation ($customer_account_id: String) {
+        inventory_generate_snapshot(data: {
+          ${customerAccountId ? 'customer_account_id: $customer_account_id' : ''}
+        }) {
           request_id
           complexity
           snapshot {
@@ -40,7 +45,10 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`
       },
-      body: JSON.stringify({ query: generateMutation })
+      body: JSON.stringify({ 
+        query: generateMutation,
+        variables: customerAccountId ? { customer_account_id: customerAccountId } : {}
+      })
     });
 
     if (!generateResponse.ok) {
