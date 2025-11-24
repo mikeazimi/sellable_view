@@ -8,7 +8,6 @@ export async function GET(request: NextRequest) {
     const customerAccountId = searchParams.get("customer_account_id")
 
     console.log('=== INVENTORY API ===')
-    console.log('Customer ID:', customerAccountId)
 
     if (!accessToken) {
       return NextResponse.json({ success: false, error: "Auth required" }, { status: 401 });
@@ -18,7 +17,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: "customer_account_id required" }, { status: 400 });
     }
 
-    // CORRECT: locations is a CONNECTION type - needs edges/node
+    // FIXED: locations connection, location field contains the Location object with name/pickable
     const query = `
       query ($customer_account_id: String) {
         warehouse_products(
@@ -31,7 +30,6 @@ export async function GET(request: NextRequest) {
             edges {
               node {
                 sku
-                warehouse_id
                 warehouse_identifier
                 on_hand
                 inventory_bin
@@ -43,9 +41,13 @@ export async function GET(request: NextRequest) {
                   edges {
                     node {
                       location_id
-                      location_name
                       quantity
-                      pickable
+                      location {
+                        id
+                        name
+                        pickable
+                        sellable
+                      }
                     }
                   }
                 }
@@ -58,7 +60,7 @@ export async function GET(request: NextRequest) {
 
     const variables = { customer_account_id: customerAccountId }
 
-    console.log('📤 Query with edges/node for locations')
+    console.log('📤 Correct query structure')
 
     const response = await fetch('https://public-api.shiphero.com/graphql', {
       method: 'POST',
@@ -73,7 +75,7 @@ export async function GET(request: NextRequest) {
 
     if (!response.ok) {
       const text = await response.text()
-      console.error('HTTP error:', text.substring(0, 500))
+      console.error('Error:', text.substring(0, 500))
       return NextResponse.json({ 
         success: false, 
         error: `HTTP ${response.status}`,
@@ -100,34 +102,33 @@ export async function GET(request: NextRequest) {
     products.forEach((product: any) => {
       const locationEdges = product.locations?.edges || []
       
-      if (locationEdges.length > 0) {
-        // Has locations - dynamic slotting
-        locationEdges.forEach(({ node: loc }: any) => {
-          if (loc.quantity > 0) {
-            items.push({
-              sku: product.sku,
-              productName: product.product?.name || product.sku,
-              quantity: loc.quantity,
-              location: loc.location_name,
-              locationId: loc.location_id,
-              zone: loc.location_name?.split('-')[0] || 'Zone',
-              pickable: loc.pickable,
-              sellable: true,
-              warehouse: product.warehouse_identifier,
-              type: 'Bin',
-              barcode: product.product?.barcode
-            })
-          }
-        })
-      } else if (product.on_hand > 0) {
-        // No locations
+      locationEdges.forEach(({ node: itemLoc }: any) => {
+        if (itemLoc.quantity > 0) {
+          items.push({
+            sku: product.sku,
+            productName: product.product?.name || product.sku,
+            quantity: itemLoc.quantity,
+            location: itemLoc.location?.name || 'Unknown',
+            locationId: itemLoc.location?.id || itemLoc.location_id,
+            zone: itemLoc.location?.name?.split('-')[0] || 'Zone',
+            pickable: itemLoc.location?.pickable || false,
+            sellable: itemLoc.location?.sellable || false,
+            warehouse: product.warehouse_identifier,
+            type: 'Bin',
+            barcode: product.product?.barcode
+          })
+        }
+      })
+      
+      // Fallback if no locations but has inventory
+      if (locationEdges.length === 0 && product.on_hand > 0) {
         items.push({
           sku: product.sku,
           productName: product.product?.name || product.sku,
           quantity: product.on_hand,
           location: product.inventory_bin || 'General',
-          locationId: product.inventory_bin || 'general',
-          zone: product.inventory_bin?.split('-')[0] || 'General',
+          locationId: 'general',
+          zone: 'General',
           pickable: true,
           sellable: true,
           warehouse: product.warehouse_identifier,
@@ -145,7 +146,7 @@ export async function GET(request: NextRequest) {
       meta: { total: items.length },
     });
   } catch (error: any) {
-    console.error("💥 Error:", error);
+    console.error("💥", error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
