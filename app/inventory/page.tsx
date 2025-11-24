@@ -141,13 +141,13 @@ export default function InventoryPage() {
 
         // Pause between pages for credit conservation
         if (hasNextPage) {
+          // Always 2 second base pause
+          await new Promise(resolve => setTimeout(resolve, 2000))
+          
+          // Additional 5 second pause every 10 pages
           if (pageCount % 10 === 0) {
-            // Every 10th page: 2s + 5s = 7s total pause
-            console.log(`⏸️  Extended pause after page ${pageCount} (7 seconds total)...`)
-            await new Promise(resolve => setTimeout(resolve, 7000))
-          } else {
-            // Regular pause: 2 seconds
-            await new Promise(resolve => setTimeout(resolve, 2000))
+            console.log(`⏸️  Extended pause after page ${pageCount} (+5 seconds)...`)
+            await new Promise(resolve => setTimeout(resolve, 5000))
           }
         }
       }
@@ -299,14 +299,7 @@ export default function InventoryPage() {
             </Button>
           </CardContent>
         </Card>
-      ) : isLoading ? (
-        <Card>
-          <CardContent className="py-16 text-center">
-            <Package className="w-12 h-12 mx-auto mb-4 text-gray-400 animate-pulse" />
-            <p className="text-gray-600 text-lg">Loading inventory...</p>
-          </CardContent>
-        </Card>
-      ) : flatInventory.length === 0 ? (
+      ) : flatInventory.length === 0 && !isLoading ? (
         <Card>
           <CardContent className="py-16 text-center">
             <Package className="w-12 h-12 mx-auto mb-4 text-gray-400" />
@@ -315,6 +308,14 @@ export default function InventoryPage() {
               <Package className="w-4 h-4 mr-2" />
               Load All Inventory
             </Button>
+          </CardContent>
+        </Card>
+      ) : flatInventory.length === 0 && isLoading ? (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <Package className="w-12 h-12 mx-auto mb-4 text-gray-400 animate-pulse" />
+            <p className="text-gray-600 text-lg">Starting to load inventory...</p>
+            <p className="text-sm text-gray-500 mt-2">Data will appear shortly</p>
           </CardContent>
         </Card>
       ) : (
