@@ -22,19 +22,10 @@ export default function AdminPage() {
   const runInventorySync = async () => {
     const accessToken = AuthManager.getValidToken()
     
-    if (!accessToken) {
+    if (!accessToken || !snapshotCustomerId) {
       toast({
         title: 'Authentication required',
-        description: 'Please authenticate in Settings first',
-        variant: 'destructive',
-      })
-      return
-    }
-
-    if (!snapshotCustomerId) {
-      toast({
-        title: 'Customer ID required',
-        description: 'Please enter a customer account ID',
+        description: 'Please authenticate and enter customer ID',
         variant: 'destructive',
       })
       return
@@ -44,16 +35,16 @@ export default function AdminPage() {
     setInventorySyncResult(null)
 
     try {
-      console.log('Starting inventory snapshot sync for customer:', snapshotCustomerId)
+      console.log('Starting snapshot for:', snapshotCustomerId)
       
-      // Convert to UUID if needed
+      // Convert to UUID
       let accountId = snapshotCustomerId.trim()
       if (/^\d+$/.test(accountId)) {
         accountId = btoa(`CustomerAccount:${accountId}`)
-        console.log('Converted to UUID:', accountId)
       }
       
-      const response = await fetch('/api/sync/inventory-snapshot', {
+      // Step 1: Start snapshot generation
+      const startResponse = await fetch('/api/sync/snapshot-start', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -62,27 +53,59 @@ export default function AdminPage() {
         body: JSON.stringify({ customer_account_id: accountId })
       })
 
-      const result = await response.json()
+      const startResult = await startResponse.json()
 
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Sync failed')
+      if (!startResult.success) {
+        throw new Error(startResult.error)
       }
 
-      setInventorySyncResult(result)
-      
+      const snapshotId = startResult.snapshot_id
+      console.log('Snapshot ID:', snapshotId, '- Polling for completion...')
+
       toast({
-        title: 'Inventory sync complete',
-        description: result.message,
+        title: 'Snapshot requested',
+        description: 'Waiting for ShipHero to generate snapshot (5-10 min)...',
       })
+
+      // Step 2: Poll until ready
+      let attempts = 0
+      const maxAttempts = 60
+
+      while (attempts < maxAttempts) {
+        attempts++
+        
+        await new Promise(resolve => setTimeout(resolve, 30000)) // 30 seconds
+        
+        console.log(`Checking status... (${attempts}/60)`)
+
+        const checkResponse = await fetch('/api/sync/snapshot-check', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ snapshot_id: snapshotId })
+        })
+
+        const checkResult = await checkResponse.json()
+
+        if (checkResult.status === 'complete') {
+          setInventorySyncResult(checkResult)
+          toast({
+            title: 'Sync complete!',
+            description: checkResult.message,
+          })
+          break
+        } else if (checkResult.status === 'processing') {
+          console.log('Still processing...')
+        } else if (!checkResult.success) {
+          throw new Error(checkResult.error)
+        }
+      }
 
     } catch (error: any) {
       console.error('Sync error:', error)
-      
-      setInventorySyncResult({
-        success: false,
-        error: error.message
-      })
-      
+      setInventorySyncResult({ success: false, error: error.message })
       toast({
         title: 'Sync failed',
         description: error.message,
