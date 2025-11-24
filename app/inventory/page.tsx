@@ -65,6 +65,10 @@ export default function InventoryPage() {
     sellable: 'all',
     pickable: 'all'
   })
+  const [preLoadFilters, setPreLoadFilters] = useState<StatusFilter>({
+    sellable: 'all',
+    pickable: 'all'
+  })
   const { toast } = useToast()
 
   // Apply status filters FIRST
@@ -176,7 +180,7 @@ export default function InventoryPage() {
       while (hasNextPage && pageCount < 200) {
         pageCount++
         
-        // Build URL with cursor and column filters
+        // Build URL with cursor, column filters, AND pre-load data filters
         const filterParams = new URLSearchParams({
           customer_account_id: accountIdToUse,
           ...(cursor && { cursor }),
@@ -185,6 +189,8 @@ export default function InventoryPage() {
           include_location: columnFilters.location.toString(),
           include_pickable: columnFilters.pickable.toString(),
           include_sellable: columnFilters.sellable.toString(),
+          filter_sellable: preLoadFilters.sellable,
+          filter_pickable: preLoadFilters.pickable,
         })
         
         const url = `/api/shiphero/inventory?${filterParams.toString()}`
@@ -473,6 +479,41 @@ export default function InventoryPage() {
               />
               <p className="text-xs text-gray-500 mt-2">
                 Just type the numeric ID - we'll handle the conversion automatically
+              </p>
+            </div>
+
+            {/* Pre-Load Data Filters */}
+            <div>
+              <h3 className="font-semibold mb-2">Data Filters (Apply Before Loading)</h3>
+              <p className="text-sm text-gray-500 mb-3">Filter data at the source - loads much faster!</p>
+              <div className="flex flex-wrap gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Sellable:</span>
+                  <select
+                    value={preLoadFilters.sellable}
+                    onChange={(e) => setPreLoadFilters(prev => ({ ...prev, sellable: e.target.value as any }))}
+                    className="px-3 py-1.5 border rounded text-sm"
+                  >
+                    <option value="all">All Locations</option>
+                    <option value="sellable">Sellable Only</option>
+                    <option value="non-sellable">Non-Sellable Only</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Pickable:</span>
+                  <select
+                    value={preLoadFilters.pickable}
+                    onChange={(e) => setPreLoadFilters(prev => ({ ...prev, pickable: e.target.value as any }))}
+                    className="px-3 py-1.5 border rounded text-sm"
+                  >
+                    <option value="all">All Locations</option>
+                    <option value="pickable">Pickable Only</option>
+                    <option value="non-pickable">Non-Pickable Only</option>
+                  </select>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                These filters reduce the amount of data fetched - much faster loading!
               </p>
             </div>
 

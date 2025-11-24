@@ -11,10 +11,13 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const customerAccountId = searchParams.get("customer_account_id")
     const cursor = searchParams.get("cursor") || null
+    const filterSellable = searchParams.get("filter_sellable") || 'all'
+    const filterPickable = searchParams.get("filter_pickable") || 'all'
     
-    console.log('=== INVENTORY API (Optimized) ===')
+    console.log('=== INVENTORY API (Pre-Filtered) ===')
     console.log('Customer ID:', customerAccountId)
     console.log('Cursor:', cursor ? cursor.substring(0, 20) + '...' : 'null (first page)')
+    console.log('Pre-filters:', { sellable: filterSellable, pickable: filterPickable })
 
     if (!accessToken) {
       return NextResponse.json({ success: false, error: "Auth required" }, { status: 401 });
@@ -24,7 +27,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: "customer_account_id required" }, { status: 400 });
     }
 
-    // Minimal optimized query - only essential fields
+    // Build query with optional sellable/pickable filters on locations
+    const sellableFilter = filterSellable !== 'all' ? `, sellable: ${filterSellable === 'sellable' ? 'true' : 'false'}` : ''
+    const pickableFilter = filterPickable !== 'all' ? `, pickable: ${filterPickable === 'pickable' ? 'true' : 'false'}` : ''
+    
     const query = `
       query ($customer_account_id: String, $cursor: String) {
         warehouse_products(
@@ -45,7 +51,7 @@ export async function GET(request: NextRequest) {
                 product {
                   name
                 }
-                locations(first: 40) {
+                locations(first: 40${sellableFilter}${pickableFilter}) {
                   edges {
                     node {
                       quantity
@@ -63,6 +69,8 @@ export async function GET(request: NextRequest) {
         }
       }
     `;
+    
+    console.log('Query with filters:', sellableFilter || 'none', pickableFilter || 'none')
 
     const variables = {
       customer_account_id: customerAccountId,
