@@ -12,18 +12,9 @@ export async function GET(request: NextRequest) {
     const customerAccountId = searchParams.get("customer_account_id")
     const cursor = searchParams.get("cursor") || null
     
-    // Get column filter preferences
-    const includeProductName = searchParams.get("include_product_name") !== 'false'
-    const includeBarcode = searchParams.get("include_barcode") === 'true'
-    const includeWarehouse = searchParams.get("include_warehouse") !== 'false'
-    const includeLocation = searchParams.get("include_location") !== 'false'
-    const includePickable = searchParams.get("include_pickable") !== 'false'
-    const includeSellable = searchParams.get("include_sellable") !== 'false'
-
-    console.log('=== INVENTORY API (Single Page) ===')
+    console.log('=== INVENTORY API (Optimized) ===')
     console.log('Customer ID:', customerAccountId)
     console.log('Cursor:', cursor ? cursor.substring(0, 20) + '...' : 'null (first page)')
-    console.log('Filters:', { includeProductName, includeBarcode, includeWarehouse, includeLocation, includePickable, includeSellable })
 
     if (!accessToken) {
       return NextResponse.json({ success: false, error: "Auth required" }, { status: 401 });

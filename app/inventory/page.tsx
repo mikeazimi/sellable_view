@@ -26,7 +26,6 @@ type SortField = 'warehouse' | 'location' | 'sku' | 'productName' | 'quantity' |
 
 interface ColumnFilters {
   productName: boolean
-  barcode: boolean
   warehouse: boolean
   location: boolean
   pickable: boolean
@@ -56,7 +55,6 @@ export default function InventoryPage() {
   const [availableCustomers, setAvailableCustomers] = useState<any[]>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFilters>({
     productName: true,
-    barcode: false,
     warehouse: true,
     location: true,
     pickable: true,
@@ -173,7 +171,6 @@ export default function InventoryPage() {
           customer_account_id: customerAccountId,
           ...(cursor && { cursor }),
           include_product_name: columnFilters.productName.toString(),
-          include_barcode: columnFilters.barcode.toString(),
           include_warehouse: columnFilters.warehouse.toString(),
           include_location: columnFilters.location.toString(),
           include_pickable: columnFilters.pickable.toString(),
@@ -453,25 +450,30 @@ export default function InventoryPage() {
       {isAuthenticated && flatInventory.length === 0 && !isLoading && (
         <Card className="mb-6">
           <CardContent className="pt-6 space-y-6">
-            {/* Customer Account Selection */}
+            {/* Customer Account ID Input */}
             <div>
-              <h3 className="font-semibold mb-2">Customer Account</h3>
-              <p className="text-sm text-gray-500 mb-3">Select which client's data to view</p>
-              {availableCustomers.length > 0 ? (
-                <select
-                  value={customerAccountId}
-                  onChange={(e) => handleCustomerChange(e.target.value)}
-                  className="w-full md:w-96 px-3 py-2 border rounded-lg bg-white dark:bg-gray-800"
-                >
-                  <option value="">Select a customer account...</option>
-                  {availableCustomers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name} (ID: {customer.legacy_id})
-                    </option>
+              <h3 className="font-semibold mb-2">Customer Account ID</h3>
+              <p className="text-sm text-gray-500 mb-3">Enter the customer account UUID (e.g., Q3VzdG9tZXJBY2NvdW50Ojg4Nzc0 for Donni HQ)</p>
+              <Input
+                type="text"
+                value={customerAccountId}
+                onChange={(e) => setCustomerAccountId(e.target.value)}
+                placeholder="Q3VzdG9tZXJBY2NvdW50Ojg4Nzc0"
+                className="w-full md:w-96 font-mono"
+              />
+              {availableCustomers.length > 0 && (
+                <div className="mt-2 text-sm text-gray-500">
+                  <span className="font-medium">Quick select:</span>
+                  {availableCustomers.map((customer, idx) => (
+                    <button
+                      key={customer.id}
+                      onClick={() => setCustomerAccountId(customer.id)}
+                      className="ml-2 text-blue-600 hover:underline"
+                    >
+                      {customer.name}
+                    </button>
                   ))}
-                </select>
-              ) : (
-                <div className="text-sm text-gray-500">Loading customer accounts...</div>
+                </div>
               )}
             </div>
 
@@ -489,15 +491,6 @@ export default function InventoryPage() {
                   className="rounded"
                 />
                 <span className="text-sm">Product Name</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={columnFilters.barcode}
-                  onChange={() => toggleColumn('barcode')}
-                  className="rounded"
-                />
-                <span className="text-sm">Barcode</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -537,7 +530,7 @@ export default function InventoryPage() {
               </label>
             </div>
             <p className="text-xs text-gray-500 mt-3">
-              Note: SKU and Quantity are always included
+              Note: SKU, Quantity, and Type are always included
             </p>
           </CardContent>
         </Card>
