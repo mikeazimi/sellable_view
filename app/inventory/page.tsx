@@ -167,13 +167,38 @@ export default function InventoryPage() {
       let accountIdToUse = customerAccountId.trim()
       
       if (/^\d+$/.test(accountIdToUse)) {
-        // Convert: 88774 → CustomerAccount:88774 → base64 (browser-compatible)
         accountIdToUse = btoa(`CustomerAccount:${accountIdToUse}`)
         console.log(`Converted ${customerAccountId} to UUID: ${accountIdToUse}`)
       }
       
-      console.log('🚀 Loading with filters')
+      console.log('🚀 Loading with filters from Supabase cache')
       
+      // Step 1: Get filtered location names from Supabase (INSTANT!)
+      let allowedLocations: Set<string> | null = null
+      
+      if (preLoadFilters.sellable !== 'all' || preLoadFilters.pickable !== 'all') {
+        console.log('📦 Querying Supabase for filtered locations...')
+        
+        const filterParams = new URLSearchParams({
+          sellable: preLoadFilters.sellable,
+          pickable: preLoadFilters.pickable
+        })
+        
+        const locResponse = await fetch(`/api/locations/filter?${filterParams.toString()}`)
+        const locResult = await locResponse.json()
+        
+        if (locResult.success) {
+          allowedLocations = new Set(locResult.locationNames)
+          console.log(`✅ Supabase returned ${allowedLocations.size} matching locations (instant!)`)
+          
+          toast({
+            title: 'Filter applied',
+            description: `Loading inventory for ${allowedLocations.size} ${preLoadFilters.sellable} locations`,
+          })
+        }
+      }
+      
+      // Step 2: Query ShipHero
       const allItems: FlatInventoryItem[] = []
       let hasNextPage = true
       let cursor: string | null = null
