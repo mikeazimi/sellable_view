@@ -156,7 +156,16 @@ export default function InventoryPage() {
     setIsLoading(true)
     
     try {
-      console.log('🚀 Loading ALL inventory - frontend pagination')
+      // Auto-convert legacy ID to UUID if just a number
+      let accountIdToUse = customerAccountId.trim()
+      
+      if (/^\d+$/.test(accountIdToUse)) {
+        // Convert: 88774 → CustomerAccount:88774 → base64
+        accountIdToUse = Buffer.from(`CustomerAccount:${accountIdToUse}`).toString('base64')
+        console.log(`Converted ${customerAccountId} to UUID: ${accountIdToUse}`)
+      }
+      
+      console.log('🚀 Loading inventory for:', accountIdToUse)
       
       const allItems: FlatInventoryItem[] = []
       let hasNextPage = true
@@ -168,7 +177,7 @@ export default function InventoryPage() {
         
         // Build URL with cursor and column filters
         const filterParams = new URLSearchParams({
-          customer_account_id: customerAccountId,
+          customer_account_id: accountIdToUse,
           ...(cursor && { cursor }),
           include_product_name: columnFilters.productName.toString(),
           include_warehouse: columnFilters.warehouse.toString(),
