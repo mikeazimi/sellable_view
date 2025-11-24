@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Upload, CheckCircle, AlertCircle } from 'lucide-react'
+import { Upload, CheckCircle, AlertCircle, Database, RefreshCw } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { AuthManager } from '@/lib/auth-manager'
 import Papa from 'papaparse'
 
 export default function AdminPage() {
@@ -308,6 +309,74 @@ export default function AdminPage() {
               Safe to upload multiple times - duplicates are handled automatically
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6 max-w-2xl">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+              <Database className="w-5 h-5 text-green-600 dark:text-green-400" />
+            </div>
+            <div>
+              <CardTitle className="text-xl">Sync Inventory Snapshot</CardTitle>
+              <CardDescription>
+                Generate ShipHero snapshot and sync all inventory to Supabase
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+              Full Inventory Sync
+            </h3>
+            <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+              <li>• Generates complete inventory snapshot from ShipHero</li>
+              <li>• Takes 5-10 minutes (polls until ready)</li>
+              <li>• Syncs ALL SKUs with locations and quantities</li>
+              <li>• Run manually or scheduled nightly at 2 AM</li>
+            </ul>
+          </div>
+
+          <Button 
+            onClick={runInventorySync}
+            disabled={isSyncingInventory}
+            size="lg"
+            className="w-full"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${isSyncingInventory ? 'animate-spin' : ''}`} />
+            {isSyncingInventory ? 'Syncing Inventory Snapshot...' : 'Run Inventory Snapshot Sync'}
+          </Button>
+
+          {inventorySyncResult && (
+            <div className={`p-4 rounded-lg border ${
+              inventorySyncResult.success 
+                ? 'bg-green-50 border-green-200' 
+                : 'bg-red-50 border-red-200'
+            }`}>
+              <div className="flex items-start gap-3">
+                {inventorySyncResult.success ? (
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                ) : (
+                  <AlertCircle className="w-5 h-5 text-red-600" />
+                )}
+                <div>
+                  <h3 className="font-semibold">
+                    {inventorySyncResult.success ? 'Sync Successful' : 'Sync Failed'}
+                  </h3>
+                  <p className="text-sm mt-1">
+                    {inventorySyncResult.message || inventorySyncResult.error}
+                  </p>
+                  {inventorySyncResult.meta && (
+                    <p className="text-xs text-gray-600 mt-2">
+                      Synced {inventorySyncResult.meta.total_records} records at {inventorySyncResult.meta.synced_at}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
