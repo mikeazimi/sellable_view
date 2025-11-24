@@ -25,20 +25,29 @@ export default function AdminPage() {
       complete: (results) => {
         console.log(`Parsed ${results.data.length} rows`)
         
-        // Transform CSV to database format
-        const locations = results.data
+        // Transform and DEDUPLICATE by warehouse+location
+        const locationMap = new Map()
+        
+        results.data
           .filter((row: any) => row.Location && row.Location !== '#VALUE!')
-          .map((row: any) => ({
-            warehouse: row.Warehouse || 'Primary',
-            location: row.Location,
-            pickable: row.Pickable === 'Yes',
-            sellable: row.Sellable === 'Yes',
-            pick_priority: parseInt(row['Pick Priority']) || 0,
-            transfer_bin: row['Transfer bin'] === 'Yes',
-            staging: row.Staging === 'Yes',
-            quantity: parseInt(row.Quantity) || 0,
-            type: row.Type || 'None'
-          }))
+          .forEach((row: any) => {
+            const key = `${row.Warehouse || 'Primary'}_${row.Location}`
+            // Keep last occurrence if duplicate
+            locationMap.set(key, {
+              warehouse: row.Warehouse || 'Primary',
+              location: row.Location,
+              pickable: row.Pickable === 'Yes',
+              sellable: row.Sellable === 'Yes',
+              pick_priority: parseInt(row['Pick Priority']) || 0,
+              transfer_bin: row['Transfer bin'] === 'Yes',
+              staging: row.Staging === 'Yes',
+              quantity: parseInt(row.Quantity) || 0,
+              type: row.Type || 'None'
+            })
+          })
+
+        const locations = Array.from(locationMap.values())
+        console.log(`Deduplicated to ${locations.length} unique locations`)
 
         setParsedLocations(locations)
         toast({
