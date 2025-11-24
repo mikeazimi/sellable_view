@@ -27,10 +27,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: "customer_account_id required" }, { status: 400 });
     }
 
-    // Build query with optional sellable/pickable filters on locations
-    const sellableFilter = filterSellable !== 'all' ? `, sellable: ${filterSellable === 'sellable' ? 'true' : 'false'}` : ''
-    const pickableFilter = filterPickable !== 'all' ? `, pickable: ${filterPickable === 'pickable' ? 'true' : 'false'}` : ''
-    
+    // Fetch all locations, filter server-side after (locations field doesn't accept filter args)
     const query = `
       query ($customer_account_id: String, $cursor: String) {
         warehouse_products(
@@ -51,7 +48,7 @@ export async function GET(request: NextRequest) {
                 product {
                   name
                 }
-                locations(first: 40${sellableFilter}${pickableFilter}) {
+                locations(first: 40) {
                   edges {
                     node {
                       quantity
@@ -70,7 +67,7 @@ export async function GET(request: NextRequest) {
       }
     `;
     
-    console.log('Query with filters:', sellableFilter || 'none', pickableFilter || 'none')
+    console.log('Will filter sellable/pickable server-side after fetch')
 
     const variables = {
       customer_account_id: customerAccountId,
@@ -109,15 +106,50 @@ export async function GET(request: NextRequest) {
       }, { status: 500 });
     }
 
-    // Return the FULL ShipHero response - frontend will handle it
-    console.log('✅ Returning one page of data')
+    // Apply server-side filters to reduce data sent to client
+    const rawData = result.data
+    
+    if (filterSellable !== 'all' || filterPickable !== 'all') {
+      console.log('Applying server-side filters...')
+      
+      const edges = rawData?.warehouse_products?.data?.edges || []
+      const filteredEdges = edges.map((edge: any) => {
+        const product = edge.node
+        const locationEdges = product.locations?.edges || []
+        
+        // Filter locations based on sellable/pickable
+        const filteredLocationEdges = locationEdges.filter(({ node: itemLoc }: any) => {
+          if (filterSellable === 'sellable' && !itemLoc.location?.sellable) return false
+          if (filterSellable === 'non-sellable' && itemLoc.location?.sellable) return false
+          if (filterPickable === 'pickable' && !itemLoc.location?.pickable) return false
+          if (filterPickable === 'non-pickable' && itemLoc.location?.pickable) return false
+          return true
+        })
+        
+        return {
+          ...edge,
+          node: {
+            ...product,
+            locations: {
+              edges: filteredLocationEdges
+            }
+          }
+        }
+      })
+      
+      // Update the data with filtered locations
+      rawData.warehouse_products.data.edges = filteredEdges
+      
+      console.log(`✅ Filtered server-side - reduced data transfer`)
+    }
     
     return NextResponse.json({
       success: true,
-      data: result.data,
+      data: rawData,
       meta: {
-        complexity: result.data?.warehouse_products?.complexity,
-        request_id: result.data?.warehouse_products?.request_id
+        complexity: rawData?.warehouse_products?.complexity,
+        request_id: rawData?.warehouse_products?.request_id,
+        filters_applied: filterSellable !== 'all' || filterPickable !== 'all'
       }
     });
 
