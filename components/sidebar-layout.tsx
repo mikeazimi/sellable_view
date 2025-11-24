@@ -26,6 +26,12 @@ const navigation = [
     href: '/settings',
     icon: Settings,
     description: 'Authentication and configuration'
+  },
+  {
+    name: 'Admin',
+    href: '/admin',
+    icon: Settings,
+    description: 'Data sync and maintenance'
   }
 ]
 
