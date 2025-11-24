@@ -16,44 +16,39 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    console.log(`💾 Uploading ${locations.length} locations to Supabase...`)
+    console.log(`💾 Upserting ${locations.length} locations to Supabase...`)
 
-    // Clear existing data
-    const { error: deleteError } = await supabaseAdmin
-      .from('locations')
-      .delete()
-      .neq('id', 0) // Delete all
-
-    if (deleteError) {
-      console.error('Delete error:', deleteError)
-    }
-
-    // Insert in batches of 1000
+    // Use UPSERT to automatically handle duplicates
+    // Unique constraint on (warehouse, location) will merge duplicates
     const batchSize = 1000
-    let inserted = 0
+    let upserted = 0
     
     for (let i = 0; i < locations.length; i += batchSize) {
       const batch = locations.slice(i, i + batchSize)
       
-      const { error } = await supabaseAdmin
+      // UPSERT: Insert new, update existing - no duplicates!
+      const { error, count } = await supabaseAdmin
         .from('locations')
-        .insert(batch)
+        .upsert(batch, { 
+          onConflict: 'warehouse,location',
+          ignoreDuplicates: false // Update existing records
+        })
 
       if (error) {
-        console.error('Insert error:', error)
+        console.error('Upsert error:', error)
         throw new Error(`Failed at record ${i}: ${error.message}`)
       }
 
-      inserted += batch.length
-      console.log(`Inserted ${inserted}/${locations.length}`)
+      upserted += batch.length
+      console.log(`Processed ${upserted}/${locations.length} (upsert handles duplicates automatically)`)
     }
 
-    console.log(`✅ Successfully inserted ${inserted} locations`)
+    console.log(`✅ Successfully upserted ${upserted} locations (duplicates merged)`)
 
     return NextResponse.json({
       success: true,
-      message: `Uploaded ${inserted} locations to Supabase`,
-      total: inserted
+      message: `Uploaded ${upserted} locations to Supabase (duplicates automatically merged)`,
+      total: upserted
     });
 
   } catch (error: any) {

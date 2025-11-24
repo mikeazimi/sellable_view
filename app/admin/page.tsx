@@ -163,7 +163,11 @@ export default function AdminPage() {
               <li>Warehouse, Location, Pickable, Sellable, Type</li>
               <li>Pickable/Sellable: "Yes" or "No"</li>
               <li>Rows with #VALUE! will be skipped</li>
+              <li>Duplicates automatically merged (upsert)</li>
             </ul>
+            <p className="text-xs text-gray-500 mt-3">
+              Safe to upload multiple times - duplicates are handled automatically
+            </p>
           </div>
         </CardContent>
       </Card>
