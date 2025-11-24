@@ -7,22 +7,19 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const customerAccountId = searchParams.get("customer_account_id")
 
-    console.log('=== INVENTORY API ===')
+    console.log('=== INVENTORY API (Paginated) ===')
 
-    if (!accessToken) {
-      return NextResponse.json({ success: false, error: "Auth required" }, { status: 401 });
+    if (!accessToken || !customerAccountId) {
+      return NextResponse.json({ success: false, error: "Auth and customer_account_id required" }, { status: 400 });
     }
 
-    if (!customerAccountId) {
-      return NextResponse.json({ success: false, error: "customer_account_id required" }, { status: 400 });
-    }
-
-    // FIXED: locations connection, location field contains the Location object with name/pickable
+    // Paginated query to stay under complexity limit (4004 credits)
     const query = `
-      query ($customer_account_id: String) {
+      query ($customer_account_id: String, $after: String) {
         warehouse_products(
           customer_account_id: $customer_account_id
           active: true
+          after: $after
         ) {
           request_id
           complexity
@@ -40,7 +37,6 @@ export async function GET(request: NextRequest) {
                 locations {
                   edges {
                     node {
-                      location_id
                       quantity
                       location {
                         id
@@ -52,54 +48,87 @@ export async function GET(request: NextRequest) {
                   }
                 }
               }
+              cursor
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
             }
           }
         }
       }
     `;
 
-    const variables = { customer_account_id: customerAccountId }
+    console.log('📤 Fetching with pagination for customer:', customerAccountId)
 
-    console.log('📤 Correct query structure')
+    const allProducts: any[] = []
+    let hasNextPage = true
+    let afterCursor: string | undefined = undefined
+    let pageCount = 0
+    const maxPages = 50
 
-    const response = await fetch('https://public-api.shiphero.com/graphql', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({ query, variables })
-    });
+    while (hasNextPage && pageCount < maxPages) {
+      pageCount++
+      
+      const variables = {
+        customer_account_id: customerAccountId,
+        after: afterCursor
+      }
 
-    console.log('📥 Status:', response.status)
+      console.log(`📄 Page ${pageCount}`)
 
-    if (!response.ok) {
-      const text = await response.text()
-      console.error('Error:', text.substring(0, 500))
-      return NextResponse.json({ 
-        success: false, 
-        error: `HTTP ${response.status}`,
-        details: text.substring(0, 500)
-      }, { status: 500 });
+      const response = await fetch('https://public-api.shiphero.com/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ query, variables })
+      });
+
+      if (!response.ok) {
+        const text = await response.text()
+        console.error('HTTP error:', text.substring(0, 500))
+        return NextResponse.json({ 
+          success: false, 
+          error: `HTTP ${response.status}`,
+          details: text.substring(0, 500)
+        }, { status: 500 });
+      }
+
+      const result = await response.json()
+
+      if (result.errors) {
+        console.error('GraphQL errors:', result.errors)
+        return NextResponse.json({ 
+          success: false, 
+          error: result.errors[0].message,
+          errors: result.errors
+        }, { status: 500 });
+      }
+
+      const edges = result.data?.warehouse_products?.data?.edges || []
+      const pageProducts = edges.map(({ node }: any) => node)
+      
+      console.log(`✅ Page ${pageCount}: ${edges.length} products, complexity: ${result.data.warehouse_products.complexity}`)
+      
+      allProducts.push(...pageProducts)
+
+      hasNextPage = result.data?.warehouse_products?.data?.pageInfo?.hasNextPage || false
+      afterCursor = result.data?.warehouse_products?.data?.pageInfo?.endCursor
+
+      // Delay between pages
+      if (hasNextPage) {
+        await new Promise(resolve => setTimeout(resolve, 500))
+      }
     }
 
-    const result = await response.json()
+    console.log(`📦 Total products: ${allProducts.length}`)
 
-    if (result.errors) {
-      console.error('GraphQL errors:', result.errors)
-      return NextResponse.json({ 
-        success: false, 
-        error: result.errors[0].message,
-        errors: result.errors
-      }, { status: 500 });
-    }
-
-    const products = result.data?.warehouse_products?.data?.edges?.map(({ node }: any) => node) || []
-    console.log(`✅ Products: ${products.length}`)
-
+    // Transform to items
     const items: any[] = []
 
-    products.forEach((product: any) => {
+    allProducts.forEach((product: any) => {
       const locationEdges = product.locations?.edges || []
       
       locationEdges.forEach(({ node: itemLoc }: any) => {
@@ -109,7 +138,7 @@ export async function GET(request: NextRequest) {
             productName: product.product?.name || product.sku,
             quantity: itemLoc.quantity,
             location: itemLoc.location?.name || 'Unknown',
-            locationId: itemLoc.location?.id || itemLoc.location_id,
+            locationId: itemLoc.location?.id || 'unknown',
             zone: itemLoc.location?.name?.split('-')[0] || 'Zone',
             pickable: itemLoc.location?.pickable || false,
             sellable: itemLoc.location?.sellable || false,
@@ -120,7 +149,6 @@ export async function GET(request: NextRequest) {
         }
       })
       
-      // Fallback if no locations but has inventory
       if (locationEdges.length === 0 && product.on_hand > 0) {
         items.push({
           sku: product.sku,
@@ -138,12 +166,15 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    console.log(`🎉 Items: ${items.length}`)
+    console.log(`🎉 Final items: ${items.length}`)
 
     return NextResponse.json({
       success: true,
       data: items,
-      meta: { total: items.length },
+      meta: { 
+        total: items.length,
+        pages: pageCount
+      },
     });
   } catch (error: any) {
     console.error("💥", error);
