@@ -10,61 +10,102 @@ import Papa from 'papaparse'
 export default function AdminPage() {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadResult, setUploadResult] = useState<any>(null)
+  const [parsedLocations, setParsedLocations] = useState<any[]>([])
+  const [uploadProgress, setUploadProgress] = useState(0)
   const { toast } = useToast()
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
 
+    console.log('Parsing CSV...')
+    
+    Papa.parse(file, {
+      header: true,
+      complete: (results) => {
+        console.log(`Parsed ${results.data.length} rows`)
+        
+        // Transform CSV to database format
+        const locations = results.data
+          .filter((row: any) => row.Location && row.Location !== '#VALUE!')
+          .map((row: any) => ({
+            warehouse: row.Warehouse || 'Primary',
+            location: row.Location,
+            pickable: row.Pickable === 'Yes',
+            sellable: row.Sellable === 'Yes',
+            pick_priority: parseInt(row['Pick Priority']) || 0,
+            transfer_bin: row['Transfer bin'] === 'Yes',
+            staging: row.Staging === 'Yes',
+            quantity: parseInt(row.Quantity) || 0,
+            type: row.Type || 'None'
+          }))
+
+        setParsedLocations(locations)
+        toast({
+          title: 'CSV parsed',
+          description: `${locations.length} locations ready to upload`,
+        })
+      },
+      error: (error: any) => {
+        toast({
+          title: 'Parse error',
+          description: error.message,
+          variant: 'destructive',
+        })
+      }
+    })
+  }
+
+  const handleConfirmUpload = async () => {
+    if (parsedLocations.length === 0) return
+
     setIsUploading(true)
     setUploadResult(null)
+    setUploadProgress(0)
 
     try {
-      console.log('Parsing CSV...')
-      
-      Papa.parse(file, {
-        header: true,
-        complete: async (results) => {
-          console.log(`Parsed ${results.data.length} rows`)
-          
-          // Transform CSV to database format
-          const locations = results.data
-            .filter((row: any) => row.Location && row.Location !== '#VALUE!')
-            .map((row: any) => ({
-              warehouse: row.Warehouse || 'Primary',
-              location: row.Location,
-              pickable: row.Pickable === 'Yes',
-              sellable: row.Sellable === 'Yes',
-              pick_priority: parseInt(row['Pick Priority']) || 0,
-              transfer_bin: row['Transfer bin'] === 'Yes',
-              staging: row.Staging === 'Yes',
-              quantity: parseInt(row.Quantity) || 0,
-              type: row.Type || 'None'
-            }))
+      console.log(`Uploading ${parsedLocations.length} locations in chunks...`)
 
-          console.log(`Uploading ${locations.length} locations...`)
+      // Upload in chunks of 500 to avoid 413 error
+      const chunkSize = 500
+      let uploaded = 0
 
-          const response = await fetch('/api/upload-locations', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ locations })
-          })
+      for (let i = 0; i < parsedLocations.length; i += chunkSize) {
+        const chunk = parsedLocations.slice(i, i + chunkSize)
+        
+        console.log(`Uploading chunk ${Math.floor(i / chunkSize) + 1}...`)
 
-          const result = await response.json()
+        const response = await fetch('/api/upload-locations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ locations: chunk })
+        })
 
-          if (!result.success) {
-            throw new Error(result.error)
-          }
-
-          setUploadResult(result)
-          toast({
-            title: 'Upload complete',
-            description: result.message,
-          })
-        },
-        error: (error: any) => {
-          throw new Error(`CSV parse error: ${error.message}`)
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(`Upload failed: ${errorText}`)
         }
+
+        const result = await response.json()
+
+        if (!result.success) {
+          throw new Error(result.error)
+        }
+
+        uploaded += chunk.length
+        setUploadProgress(Math.round((uploaded / parsedLocations.length) * 100))
+        console.log(`Uploaded ${uploaded}/${parsedLocations.length}`)
+      }
+
+      setUploadResult({
+        success: true,
+        message: `Successfully uploaded ${uploaded} locations`,
+        total: uploaded
+      })
+      
+      toast({
+        title: 'Upload complete',
+        description: `${uploaded} locations uploaded to Supabase`,
       })
 
     } catch (error: any) {
@@ -77,6 +118,7 @@ export default function AdminPage() {
       })
     } finally {
       setIsUploading(false)
+      setUploadProgress(0)
     }
   }
 
@@ -111,7 +153,7 @@ export default function AdminPage() {
             <input
               type="file"
               accept=".csv"
-              onChange={handleFileUpload}
+              onChange={handleFileSelect}
               disabled={isUploading}
               className="hidden"
               id="csv-upload"
@@ -119,14 +161,44 @@ export default function AdminPage() {
             <label htmlFor="csv-upload">
               <Button asChild disabled={isUploading}>
                 <span>
-                  {isUploading ? 'Uploading...' : 'Choose CSV File'}
+                  Choose CSV File
                 </span>
               </Button>
             </label>
             <p className="text-sm text-gray-500 mt-3">
-              Upload initial_locations_to_upload.csv
+              Select your locations CSV file
             </p>
           </div>
+
+          {parsedLocations.length > 0 && !isUploading && (
+            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <p className="font-medium text-blue-900 dark:text-blue-100 mb-3">
+                Ready to upload {parsedLocations.length} locations
+              </p>
+              <Button 
+                onClick={handleConfirmUpload}
+                className="w-full"
+                size="lg"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Confirm Upload to Supabase
+              </Button>
+            </div>
+          )}
+
+          {isUploading && (
+            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
+                Uploading... {uploadProgress}% complete
+              </p>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           {uploadResult && (
             <div className={`p-4 rounded-lg border ${
