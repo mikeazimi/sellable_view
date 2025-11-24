@@ -12,7 +12,65 @@ export default function AdminPage() {
   const [uploadResult, setUploadResult] = useState<any>(null)
   const [parsedLocations, setParsedLocations] = useState<any[]>([])
   const [uploadProgress, setUploadProgress] = useState(0)
-  const { toast } = useToast()
+  const [isSyncingInventory, setIsSyncingInventory] = useState(false)
+  const [inventorySyncResult, setInventorySyncResult] = useState<any>(null)
+  const { toast} = useToast()
+
+  const runInventorySync = async () => {
+    const accessToken = AuthManager.getValidToken()
+    
+    if (!accessToken) {
+      toast({
+        title: 'Authentication required',
+        description: 'Please authenticate in Settings first',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setIsSyncingInventory(true)
+    setInventorySyncResult(null)
+
+    try {
+      console.log('Starting inventory snapshot sync...')
+      
+      const response = await fetch('/api/sync/inventory-snapshot', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      })
+
+      const result = await response.json()
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Sync failed')
+      }
+
+      setInventorySyncResult(result)
+      
+      toast({
+        title: 'Inventory sync complete',
+        description: result.message,
+      })
+
+    } catch (error: any) {
+      console.error('Sync error:', error)
+      
+      setInventorySyncResult({
+        success: false,
+        error: error.message
+      })
+      
+      toast({
+        title: 'Sync failed',
+        description: error.message,
+        variant: 'destructive',
+      })
+    } finally {
+      setIsSyncingInventory(false)
+    }
+  }
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
