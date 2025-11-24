@@ -62,9 +62,6 @@ export function SidebarLayout({ children }: SidebarLayoutProps) {
               <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
                 Inventory View
               </h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                ShipHero 3PL
-              </p>
             </div>
           </div>
           <Button

@@ -265,11 +265,11 @@ export default function InventoryPage() {
         }
       }
 
-      console.log(`🎉 Complete! ${allItems.length} items from ${pageCount} pages`)
+      console.log(`🎉 Complete! ${allItems.length} records from ${pageCount} pages`)
       
       toast({
         title: 'Inventory loaded',
-        description: `${allItems.length} items loaded from ${pageCount} pages`,
+        description: `${allItems.length} records loaded from ${pageCount} pages`,
       })
 
     } catch (error: any) {
@@ -360,7 +360,7 @@ export default function InventoryPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
-            Inventory
+            Inventory Summary
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
             {selectedCustomer && (
@@ -370,7 +370,7 @@ export default function InventoryPage() {
                 </Badge>
               </span>
             )}
-            {flatInventory.length > 0 && ` ${filteredInventory.length} items`}
+            {flatInventory.length > 0 && ` ${filteredInventory.length} records`}
           </p>
         </div>
         <div className="flex gap-2">
@@ -449,7 +449,7 @@ export default function InventoryPage() {
                 </select>
               </div>
               <div className="text-sm text-gray-500">
-                Showing {filteredInventory.length} of {flatInventory.length} items
+                Showing {filteredInventory.length} of {flatInventory.length} records
               </div>
             </div>
           </CardContent>
@@ -538,7 +538,7 @@ export default function InventoryPage() {
       {isLoading && flatInventory.length > 0 && (
         <div className="mb-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
           <p className="text-sm text-blue-800 dark:text-blue-200">
-            Loading more data... ({flatInventory.length} items loaded so far)
+            Loading more data... ({flatInventory.length} records loaded so far)
           </p>
         </div>
       )}
