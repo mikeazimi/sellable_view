@@ -224,11 +224,10 @@ export default function InventoryPage() {
           const locationEdges = product.locations?.edges || []
           
           locationEdges.forEach(({ node: locationData }: any) => {
-            // Apply pre-load filters (client-side)
-            if (preLoadFilters.sellable === 'sellable' && !locationData.location?.sellable) return
-            if (preLoadFilters.sellable === 'non-sellable' && locationData.location?.sellable) return
-            if (preLoadFilters.pickable === 'pickable' && !locationData.location?.pickable) return
-            if (preLoadFilters.pickable === 'non-pickable' && locationData.location?.pickable) return
+            // If we have filtered locations from Supabase, only include those
+            if (allowedLocations && !allowedLocations.has(locationData.location?.name)) {
+              return // Skip this location - not in our filtered set
+            }
             
             if (locationData.quantity > 0) {
               allItems.push({
