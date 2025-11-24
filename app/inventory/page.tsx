@@ -170,49 +170,103 @@ export default function InventoryPage() {
         console.log(`Converted ${customerAccountId} to UUID: ${accountIdToUse}`)
       }
       
-      console.log('🚀 Loading inventory for:', accountIdToUse)
-      console.log('Filters:', { sellable: preLoadFilters.sellable, pickable: preLoadFilters.pickable })
+      console.log('🚀 Loading with filters')
       
-      // Single API call with filters
-      const filterParams = new URLSearchParams({
-        customer_account_id: accountIdToUse,
-        filter_sellable: preLoadFilters.sellable,
-        filter_pickable: preLoadFilters.pickable,
-      })
-      
-      const url = `/api/shiphero/inventory?${filterParams.toString()}`
-      
-      const response = await fetch(url, {
-        method: 'GET',
+      const allItems: FlatInventoryItem[] = []
+      let hasNextPage = true
+      let cursor: string | null = null
+      let pageCount = 0
+
+      // Get warehouse mapping once
+      const whResponse = await fetch('https://public-api.shiphero.com/graphql', {
+        method: 'POST',
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ 
+          query: `query { account { data { warehouses { id identifier } } } }` 
+        })
+      })
+      const whResult = await whResponse.json()
+      const warehouseMap = new Map()
+      whResult.data?.account?.data?.warehouses?.forEach((wh: any) => {
+        warehouseMap.set(wh.id, wh.identifier)
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error('❌ Error:', errorData)
+      while (hasNextPage && pageCount < 50) {
+        pageCount++
         
-        if (response.status === 401) {
-          AuthManager.clearAuth()
-          setIsAuthenticated(false)
-          throw new Error('Authentication expired')
+        const filterParams = new URLSearchParams({
+          customer_account_id: accountIdToUse,
+          filter_sellable: preLoadFilters.sellable,
+          filter_pickable: preLoadFilters.pickable,
+          ...(cursor && { cursor })
+        })
+        
+        const url = `/api/shiphero/inventory?${filterParams.toString()}`
+        
+        console.log(`📄 Page ${pageCount}`)
+        
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          console.error('❌ Error:', errorData)
+          throw new Error(errorData.error || 'Failed to load')
         }
+
+        const result = await response.json()
+
+        if (!result.success) {
+          throw new Error(result.error || 'Failed')
+        }
+
+        // Process locations data
+        const locationsData = result.data?.locations?.data
+        const locationEdges = locationsData?.edges || []
         
-        throw new Error(errorData.error || 'Failed to load')
+        console.log(`✅ Page ${pageCount}: ${locationEdges.length} locations`)
+
+        // Transform each location's inventory
+        locationEdges.forEach(({ node: location }: any) => {
+          const inventoryEdges = location.inventory?.edges || []
+          
+          inventoryEdges.forEach(({ node: inv }: any) => {
+            if (inv.on_hand > 0) {
+              allItems.push({
+                sku: inv.sku,
+                productName: inv.product?.name || inv.sku,
+                quantity: inv.on_hand,
+                location: location.name,
+                zone: location.name?.split('-')[0] || 'Zone',
+                pickable: location.pickable,
+                sellable: location.sellable,
+                warehouse: warehouseMap.get(location.warehouse_id) || 'Unknown',
+                type: 'Bin',
+                barcode: ''
+              })
+            }
+          })
+        })
+
+        setFlatInventory([...allItems])
+
+        hasNextPage = locationsData?.pageInfo?.hasNextPage || false
+        cursor = locationsData?.pageInfo?.endCursor || null
+
+        if (hasNextPage) {
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        }
       }
 
-      const result = await response.json()
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to load')
-      }
-
-      const items = result.data || []
-      console.log(`✅ Loaded: ${items.length} filtered records`)
-
-      setFlatInventory(items)
+      console.log(`🎉 Complete! ${allItems.length} records from ${pageCount} pages`)
       
       toast({
         title: 'Inventory loaded',

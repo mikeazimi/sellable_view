@@ -6,42 +6,57 @@ export async function GET(request: NextRequest) {
     const accessToken = authHeader?.replace('Bearer ', '')
     const searchParams = request.nextUrl.searchParams
     const customerAccountId = searchParams.get("customer_account_id")
+    const cursor = searchParams.get("cursor") || null
     const filterSellable = searchParams.get("filter_sellable") || 'all'
     const filterPickable = searchParams.get("filter_pickable") || 'all'
 
-    console.log('=== INVENTORY API (locations query) ===')
+    console.log('=== INVENTORY API (locations with inventory) ===')
     console.log('Customer:', customerAccountId)
+    console.log('Cursor:', cursor || 'null (first page)')
     console.log('Filters:', { sellable: filterSellable, pickable: filterPickable })
 
     if (!accessToken || !customerAccountId) {
       return NextResponse.json({ success: false, error: "Auth required" }, { status: 400 });
     }
 
-    // Use LOCATIONS query which DOES support sellable/pickable filtering!
-    // This way we only fetch the locations we care about
-    const sellableArg = filterSellable === 'sellable' ? 'sellable: true' : filterSellable === 'non-sellable' ? 'sellable: false' : ''
-    const pickableArg = filterPickable === 'pickable' ? 'pickable: true' : filterPickable === 'non-pickable' ? 'pickable: false' : ''
-    const filterArgs = [sellableArg, pickableArg].filter(a => a).join(', ')
+    // Build filter arguments for locations query
+    const filters: string[] = []
+    if (filterSellable === 'sellable') filters.push('sellable: true')
+    if (filterSellable === 'non-sellable') filters.push('sellable: false')
+    if (filterPickable === 'pickable') filters.push('pickable: true')
+    if (filterPickable === 'non-pickable') filters.push('pickable: false')
+    
+    const filterString = filters.length > 0 ? filters.join(', ') + ',' : ''
 
+    // Query locations with filters, get inventory for each location
     const query = `
-      query ($customer_account_id: String) {
-        locations(${filterArgs}) {
+      query ($customer_account_id: String, $cursor: String) {
+        locations(
+          ${filterString}
+          first: 250,
+          after: $cursor
+        ) {
           request_id
           complexity
           data {
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
             edges {
               node {
                 name
+                warehouse_id
                 pickable
                 sellable
-                warehouse_id
-                products(customer_account_id: $customer_account_id) {
+                inventory(first: 100) {
                   edges {
                     node {
                       sku
-                      quantity
+                      on_hand
                       product {
                         name
+                        active
                       }
                     }
                   }
@@ -53,9 +68,12 @@ export async function GET(request: NextRequest) {
       }
     `;
 
-    const variables = { customer_account_id: customerAccountId }
+    const variables = {
+      customer_account_id: customerAccountId,
+      cursor: cursor
+    }
 
-    console.log('📤 Query locations with filters (gets ONLY matching locations!)')
+    console.log('📤 Fetching locations (250 per page)')
 
     const response = await fetch('https://public-api.shiphero.com/graphql', {
       method: 'POST',
@@ -70,7 +88,7 @@ export async function GET(request: NextRequest) {
 
     if (!response.ok) {
       const text = await response.text()
-      console.error('Error:', text.substring(0, 500))
+      console.error('HTTP error:', text.substring(0, 500))
       return NextResponse.json({ 
         success: false, 
         error: `HTTP ${response.status}`,
@@ -89,62 +107,16 @@ export async function GET(request: NextRequest) {
       }, { status: 500 });
     }
 
-    console.log('Complexity:', result.data?.locations?.complexity)
+    console.log('✅ Page fetched successfully')
 
-    const locations = result.data?.locations?.data?.edges?.map(({ node }: any) => node) || []
-    console.log(`✅ Locations (filtered): ${locations.length}`)
-
-    // Get warehouses
-    const whQuery = `query { account { data { warehouses { id identifier } } } }`;
-    const whRes = await fetch('https://public-api.shiphero.com/graphql', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({ query: whQuery })
-    });
-
-    const whResult = await whRes.json()
-    const warehouseMap = new Map()
-    whResult.data?.account?.data?.warehouses?.forEach((wh: any) => {
-      warehouseMap.set(wh.id, wh.identifier)
-    })
-
-    // Transform
-    const items: any[] = []
-
-    locations.forEach((location: any) => {
-      const productEdges = location.products?.edges || []
-      
-      productEdges.forEach(({ node: product }: any) => {
-        if (product.quantity > 0) {
-          items.push({
-            sku: product.sku,
-            productName: product.product?.name || product.sku,
-            quantity: product.quantity,
-            location: location.name,
-            zone: location.name?.split('-')[0] || 'Zone',
-            pickable: location.pickable,
-            sellable: location.sellable,
-            warehouse: warehouseMap.get(location.warehouse_id) || 'Unknown',
-            type: 'Bin',
-            barcode: ''
-          })
-        }
-      })
-    })
-
-    console.log(`🎉 Items: ${items.length}`)
-
+    // Return the ShipHero data structure - frontend will process
     return NextResponse.json({
       success: true,
-      data: items,
-      meta: { 
-        total: items.length,
-        locations_queried: locations.length,
-        filters_applied: filterSellable !== 'all' || filterPickable !== 'all'
-      },
+      data: result.data,
+      meta: {
+        complexity: result.data?.locations?.complexity,
+        request_id: result.data?.locations?.request_id
+      }
     });
   } catch (error: any) {
     console.error("💥", error);
