@@ -171,117 +171,52 @@ export default function InventoryPage() {
       }
       
       console.log('🚀 Loading inventory for:', accountIdToUse)
+      console.log('Filters:', { sellable: preLoadFilters.sellable, pickable: preLoadFilters.pickable })
       
-      const allItems: FlatInventoryItem[] = []
-      let hasNextPage = true
-      let cursor: string | null = null
-      let pageCount = 0
-
-      while (hasNextPage && pageCount < 200) {
-        pageCount++
-        
-        // Build URL with cursor, column filters, AND pre-load data filters
-        const filterParams = new URLSearchParams({
-          customer_account_id: accountIdToUse,
-          ...(cursor && { cursor }),
-          include_product_name: columnFilters.productName.toString(),
-          include_warehouse: columnFilters.warehouse.toString(),
-          include_location: columnFilters.location.toString(),
-          include_pickable: columnFilters.pickable.toString(),
-          include_sellable: columnFilters.sellable.toString(),
-          filter_sellable: preLoadFilters.sellable,
-          filter_pickable: preLoadFilters.pickable,
-        })
-        
-        const url = `/api/shiphero/inventory?${filterParams.toString()}`
-        
-        console.log(`📄 Fetching page ${pageCount}...`)
-        
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          }
-        })
-
-        if (!response.ok) {
-          const errorData = await response.json()
-          console.error('❌ Page', pageCount, 'error:', errorData)
-          
-          if (response.status === 401) {
-            AuthManager.clearAuth()
-            setIsAuthenticated(false)
-            throw new Error('Authentication expired')
-          }
-          
-          throw new Error(errorData.error || `Error on page ${pageCount}`)
+      // Single API call with filters
+      const filterParams = new URLSearchParams({
+        customer_account_id: accountIdToUse,
+        filter_sellable: preLoadFilters.sellable,
+        filter_pickable: preLoadFilters.pickable,
+      })
+      
+      const url = `/api/shiphero/inventory?${filterParams.toString()}`
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
         }
+      })
 
-        const result = await response.json()
-
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to load page')
-        }
-
-        // Process page data
-        const pageData = result.data?.warehouse_products?.data
-        const edges = pageData?.edges || []
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error('❌ Error:', errorData)
         
-        console.log(`✅ Page ${pageCount}: ${edges.length} products, complexity: ${result.meta?.complexity}`)
-
-        // Transform products to flat items - apply pre-load filters here
-        edges.forEach(({ node: product }: any) => {
-          const locationEdges = product.locations?.edges || []
-          
-          locationEdges.forEach(({ node: itemLoc }: any) => {
-            // Apply pre-load filters
-            if (preLoadFilters.sellable === 'sellable' && !itemLoc.location?.sellable) return
-            if (preLoadFilters.sellable === 'non-sellable' && itemLoc.location?.sellable) return
-            if (preLoadFilters.pickable === 'pickable' && !itemLoc.location?.pickable) return
-            if (preLoadFilters.pickable === 'non-pickable' && itemLoc.location?.pickable) return
-            
-            if (itemLoc.quantity > 0) {
-              allItems.push({
-                sku: product.sku,
-                productName: product.product?.name || product.sku,
-                quantity: itemLoc.quantity,
-                location: itemLoc.location?.name || 'Unknown',
-                zone: itemLoc.location?.name?.split('-')[0] || 'Zone',
-                pickable: itemLoc.location?.pickable || false,
-                sellable: itemLoc.location?.sellable || false,
-                warehouse: product.warehouse_identifier,
-                type: 'Bin',
-                barcode: product.product?.barcode || ''
-              })
-            }
-          })
-        })
-
-        // Update UI immediately with current data - user sees results right away!
-        setFlatInventory([...allItems])
-
-        hasNextPage = pageData?.pageInfo?.hasNextPage || false
-        cursor = pageData?.pageInfo?.endCursor || null
-
-        // Pause between pages for credit conservation
-        if (hasNextPage) {
-          // Always 2 second base pause
-          await new Promise(resolve => setTimeout(resolve, 2000))
-          
-          // Additional 5 second pause every 10 pages
-          if (pageCount % 10 === 0) {
-            console.log(`⏸️  Extended pause after page ${pageCount} (+5 seconds)...`)
-            await new Promise(resolve => setTimeout(resolve, 5000))
-          }
+        if (response.status === 401) {
+          AuthManager.clearAuth()
+          setIsAuthenticated(false)
+          throw new Error('Authentication expired')
         }
+        
+        throw new Error(errorData.error || 'Failed to load')
       }
 
-      console.log(`🎉 Complete! ${allItems.length} records from ${pageCount} pages`)
+      const result = await response.json()
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to load')
+      }
+
+      const items = result.data || []
+      console.log(`✅ Loaded: ${items.length} filtered records`)
+
+      setFlatInventory(items)
       
       toast({
         title: 'Inventory loaded',
-        description: `${allItems.length} records loaded from ${pageCount} pages`,
+        description: `${items.length} records loaded`,
       })
 
     } catch (error: any) {
