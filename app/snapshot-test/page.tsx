@@ -30,7 +30,8 @@ export default function SnapshotTestPage() {
   const testSnapshot = async () => {
     const accessToken = AuthManager.getValidToken()
     if (!accessToken) {
-      alert('Please authenticate first in Token Access page')
+      console.error('❌ Not authenticated')
+      setStatus('Error: Not authenticated')
       return
     }
 

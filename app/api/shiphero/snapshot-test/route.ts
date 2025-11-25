@@ -113,6 +113,8 @@ export async function GET(request: NextRequest) {
 
       const variables = { snapshot_id: snapshotId }
 
+      console.log(`📊 Checking status for ${snapshotId}...`)
+
       const response = await fetch('https://public-api.shiphero.com/graphql', {
         method: 'POST',
         headers: {
@@ -133,6 +135,7 @@ export async function GET(request: NextRequest) {
       }
 
       const snapshot = result.data?.inventory_snapshot?.data
+      console.log(`   Status: ${snapshot.status}`)
       
       return NextResponse.json({
         success: true,
