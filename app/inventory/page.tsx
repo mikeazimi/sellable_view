@@ -398,14 +398,7 @@ export default function InventoryPage() {
             Inventory Summary
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            {selectedCustomer && (
-              <span className="inline-flex items-center gap-2">
-                <Badge variant="outline" className="font-normal">
-                  {selectedCustomer.name}
-                </Badge>
-              </span>
-            )}
-            {flatInventory.length > 0 && ` ${filteredInventory.length} records`}
+            {flatInventory.length > 0 && `${filteredInventory.length} records`}
           </p>
         </div>
         <div className="flex gap-2">
