@@ -70,7 +70,23 @@ export default function InventoryPage() {
     pickable: 'all'
   })
   const [forceRefresh, setForceRefresh] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('')
+  const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
+
+  useEffect(() => {
+    const token = AuthManager.getValidToken()
+    if (token) {
+      setIsAuthenticated(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    // Auto-load from Supabase when filters change or on mount
+    if (isAuthenticated && !isLoading) {
+      loadInventoryFromSupabase()
+    }
+  }, [preLoadFilters.sellable, preLoadFilters.pickable, isAuthenticated])
 
   // Apply status filters FIRST
   const filteredInventory = flatInventory.filter(item => {
@@ -91,6 +107,41 @@ export default function InventoryPage() {
 
   const toggleColumn = (column: keyof ColumnFilters) => {
     setColumnFilters(prev => ({ ...prev, [column]: !prev[column] }))
+  }
+
+  const loadInventoryFromSupabase = async () => {
+    setIsLoading(true)
+    setLoadingMessage('Loading from database...')
+    setError(null)
+
+    try {
+      const supabaseParams = new URLSearchParams({
+        customer_account_id: btoa(`CustomerAccount:${DEFAULT_CUSTOMER_ID}`),
+        sellable: preLoadFilters.sellable,
+        pickable: preLoadFilters.pickable
+      })
+      
+      console.log('📦 Loading from Supabase cache...')
+      const supabaseResponse = await fetch(`/api/inventory/supabase?${supabaseParams.toString()}`)
+      const supabaseResult = await supabaseResponse.json()
+      
+      if (supabaseResult.success && supabaseResult.data && supabaseResult.data.length > 0) {
+        setFlatInventory(supabaseResult.data)
+        setLoadingMessage(`✅ ${supabaseResult.data.length} records loaded`)
+        console.log(`✅ Loaded ${supabaseResult.data.length} records from Supabase (instant!)`)
+      } else {
+        // No cache
+        setFlatInventory([])
+        setLoadingMessage('No cached data. Click "Refresh from ShipHero" or upload snapshot in Admin.')
+        setError('No inventory in cache. Use Admin to upload snapshot CSV or click "Refresh from ShipHero".')
+      }
+    } catch (err: any) {
+      console.error("Error loading from Supabase:", err)
+      setError(err.message)
+      setLoadingMessage('')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const refreshFromShipHero = async () => {
