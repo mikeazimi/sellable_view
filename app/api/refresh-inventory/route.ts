@@ -34,28 +34,36 @@ export async function POST(request: NextRequest) {
     // Helper to delay between requests (rate limiting)
     const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-    // Smart delay: 4-8 seconds after every 5-10 pages
-    const getSmartDelay = (pageNum: number) => {
+    // Delay strategy: 1.5s base + 5s every 5 pages + 8s every 10 pages
+    const getDelay = (pageNum: number) => {
+      const baseDelay = 1500 // 1.5 seconds between ALL pages
+      
       if (pageNum % 10 === 0) {
-        // Every 10th page: 6-8 second delay
-        return 6000 + Math.random() * 2000
+        // Every 10th page: 1.5s + 8s = 9.5s total
+        return baseDelay + 8000
       } else if (pageNum % 5 === 0) {
-        // Every 5th page: 4-6 second delay
-        return 4000 + Math.random() * 2000
+        // Every 5th page: 1.5s + 5s = 6.5s total
+        return baseDelay + 5000
       }
-      return 0 // No delay for other pages
+      return baseDelay // 1.5s for all other pages
     }
 
     while (hasNextPage) {
       pageCount++
       const pageStart = Date.now()
       
-      // Apply smart delay after every 5-10 pages
-      const smartDelay = getSmartDelay(pageCount - 1) // Check previous page
-      if (smartDelay > 0) {
-        const delaySec = (smartDelay / 1000).toFixed(1)
-        console.log(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] ⏸️  Smart delay: ${delaySec}s (every ${(pageCount - 1) % 10 === 0 ? '10' : '5'} pages)`)
-        await delay(smartDelay)
+      // Apply delay before fetching (except first page)
+      if (pageCount > 1) {
+        const delayMs = getDelay(pageCount - 1) // Check previous page
+        const delaySec = (delayMs / 1000).toFixed(1)
+        
+        if (delayMs > 1500) {
+          // Log extra delay info for 5th/10th pages
+          const extraInfo = (pageCount - 1) % 10 === 0 ? ' (10th page)' : ' (5th page)'
+          console.log(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] ⏸️  Waiting ${delaySec}s${extraInfo}`)
+        }
+        
+        await delay(delayMs)
       }
       
       const query = `
