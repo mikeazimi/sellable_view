@@ -330,19 +330,25 @@ export default function InventoryPage() {
   }
 
   const exportToCSV = () => {
-    const headers = ['Warehouse', 'Location', 'Zone', 'SKU', 'Product', 'Quantity', 'Pickable', 'Sellable', 'Barcode']
+    const headers = ['Item', 'Sku', 'Warehouse', 'Client', 'Location', 'Type', 'Units', 'Active Item', 'Pickable', 'Sellable', 'Active Lot', 'Lot Name', 'Exp Date', 'Days to Expire', 'Creation Date']
     const csvContent = [
-      headers.join(','),
+      headers.map(h => `"${h}"`).join(','),
       ...filteredInventory.map(item => [
-        `"${item.warehouse}"`,
-        `"${item.location}"`,
-        `"${item.zone}"`,
-        `"${item.sku}"`,
         `"${item.productName}"`,
+        `"${item.sku}"`,
+        `"${item.warehouse}"`,
+        `"${getSelectedAccountName()}"`,
+        `"${item.location}"`,
+        `"${item.type}"`,
         item.quantity,
-        item.pickable ? 'Yes' : 'No',
-        item.sellable ? 'Yes' : 'No',
-        `"${item.barcode || ''}"`
+        `"yes"`,
+        `"${item.pickable ? 'yes' : 'no'}"`,
+        `"${item.sellable ? 'yes' : 'no'}"`,
+        `""`,
+        `""`,
+        `""`,
+        `""`,
+        `""`
       ].join(','))
     ].join('\n')
 
