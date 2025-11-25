@@ -89,52 +89,6 @@ export default function InventoryPage() {
     skusNonSellable: new Set(filteredInventory.filter(item => !item.sellable).map(item => item.sku)).size,
   }
 
-  useEffect(() => {
-    const authenticated = AuthManager.isAuthenticated()
-    setIsAuthenticated(authenticated)
-    
-    // Load saved customer if exists
-    const savedCustomer = CustomerManager.getSelectedCustomer()
-    if (savedCustomer) {
-      setSelectedCustomer(savedCustomer)
-      setCustomerAccountId(savedCustomer.id)
-    }
-    
-    // Load available customers if authenticated
-    if (authenticated) {
-      loadAvailableCustomers()
-    }
-  }, [])
-
-  const loadAvailableCustomers = async () => {
-    const accessToken = AuthManager.getValidToken()
-    if (!accessToken) return
-
-    try {
-      const response = await fetch('/api/shiphero/customers', {
-        headers: { 'Authorization': `Bearer ${accessToken}` }
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        if (result.success) {
-          setAvailableCustomers(result.data)
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load customers:', error)
-    }
-  }
-
-  const handleCustomerChange = (customerId: string) => {
-    setCustomerAccountId(customerId)
-    const customer = availableCustomers.find(c => c.id === customerId)
-    if (customer) {
-      setSelectedCustomer(customer)
-      CustomerManager.saveCustomer(customer)
-    }
-  }
-
   const toggleColumn = (column: keyof ColumnFilters) => {
     setColumnFilters(prev => ({ ...prev, [column]: !prev[column] }))
   }
