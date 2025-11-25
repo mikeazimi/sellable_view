@@ -27,29 +27,7 @@ export default function SnapshotPage() {
   const [accountId, setAccountId] = useState('88774')
   const [sellableFilter, setSellableFilter] = useState('all')
   const [pickableFilter, setPickableFilter] = useState('all')
-  const [snapshots] = useState<Snapshot[]>([
-    {
-      id: '1',
-      account_id: '88774',
-      account_name: 'Donni HQ',
-      status: 'completed',
-      started_at: '2025-11-25 10:30 AM',
-      completed_at: '2025-11-25 10:35 AM',
-      total_records: 4606,
-      progress_percentage: 100,
-      filters: { sellable: 'all', pickable: 'all' }
-    },
-    {
-      id: '2',
-      account_id: '88774',
-      account_name: 'Donni HQ',
-      status: 'running',
-      started_at: '2025-11-25 02:15 PM',
-      total_records: 2304,
-      progress_percentage: 50,
-      filters: { sellable: 'all', pickable: 'all' }
-    }
-  ])
+  const [snapshots] = useState<Snapshot[]>([])
   
   const { toast } = useToast()
 

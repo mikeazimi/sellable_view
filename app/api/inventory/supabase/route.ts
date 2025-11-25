@@ -29,10 +29,11 @@ export async function GET(request: NextRequest) {
 
     console.log(`Database has ${count} records`)
 
-    // Build query with filters
+    // Build query with filters - fetch ALL records (no limit)
     let query = supabaseAdmin
       .from('inventory_locations')
       .select('*')
+      .limit(100000) // Remove default 1000 row limit
 
     if (sellableFilter === 'sellable') {
       query = query.eq('sellable', true)
