@@ -64,9 +64,6 @@ export async function POST(request: NextRequest) {
       let cursor: string | null = null
       let hasNextPage = true
       let pageCount = 0
-      
-      // Track credit pool (ShipHero max: 4004 credits)
-      let creditsRemaining = 4004
       let totalCreditsUsed = 0
 
       // Helper to delay between requests (rate limiting)
@@ -215,11 +212,9 @@ export async function POST(request: NextRequest) {
         
         // Update credit tracking
         totalCreditsUsed += complexity
-        creditsRemaining = Math.max(0, 4004 - totalCreditsUsed)
         
         log(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] ✅ Page ${pageCount} complete (${pageElapsed}s)`)
-        log(`   📊 Items: ${allItems.length} total | Used: ${complexity} credits | Remaining: ${creditsRemaining} credits`)
-        log(`   💳 Total used: ${totalCreditsUsed} credits | Request ID: ${requestId}`)
+        log(`   📊 Items: ${allItems.length} total | Page used: ${complexity} credits | Total used: ${totalCreditsUsed} credits`)
 
         hasNextPage = data.pageInfo.hasNextPage
         cursor = data.pageInfo.endCursor
