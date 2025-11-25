@@ -31,6 +31,12 @@ const navigation = [
     description: 'Manage inventory snapshots'
   },
   {
+    name: 'Snapshot Test',
+    href: '/snapshot-test',
+    icon: Camera,
+    description: '🧪 Test snapshot workflow'
+  },
+  {
     name: 'Seed Data',
     href: '/seed-data',
     icon: Database,
