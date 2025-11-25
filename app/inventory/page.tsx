@@ -237,6 +237,12 @@ export default function InventoryPage() {
         // Check if more pages
         hasNextPage = result.pageInfo.hasNextPage
         cursor = result.pageInfo.endCursor
+
+        // Proactive delay to manage credit rate (3 seconds between pages)
+        if (hasNextPage) {
+          console.log(`⏸️  Waiting 3s to manage credit rate...`)
+          await new Promise(resolve => setTimeout(resolve, 3000))
+        }
       }
 
       console.log(`⏱️ [${((Date.now() - startTime) / 1000).toFixed(2)}s] 📊 All pages fetched: ${allItems.length} items from ${pageCount} pages`)
