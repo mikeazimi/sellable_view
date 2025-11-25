@@ -490,9 +490,9 @@ export default function InventoryPage() {
                   {filteredInventory.length.toLocaleString()} of {flatInventory.length.toLocaleString()} items
                 </span>
               </div>
-              <Button onClick={exportToCSV} variant="outline" size="sm" className="text-sm">
+              <Button onClick={exportToCSV} variant="outline" size="sm" className="text-sm font-medium">
                 <Download className="w-4 h-4 mr-1.5" />
-                Export
+                Export CSV
               </Button>
             </div>
           </CardContent>
