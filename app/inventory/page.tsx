@@ -281,7 +281,7 @@ export default function InventoryPage() {
   }
 
   return (
-    <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-screen">
+    <div className="p-6 min-h-screen">
       {/* Header with Actions */}
       <div className="mb-6 flex items-start justify-between">
         <div>
@@ -330,7 +330,7 @@ export default function InventoryPage() {
             <Button
               onClick={refreshFromShipHero}
               disabled={isLoading}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm"
+              className="bg-primary hover:bg-primary/90 text-white text-sm shadow-sm"
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh from ShipHero
@@ -342,27 +342,27 @@ export default function InventoryPage() {
       {/* Summary Stats */}
       {flatInventory.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-          <Card className="shadow-sm border border-gray-200 dark:border-gray-700">
+          <Card className="shadow-sm">
             <CardContent className="p-4">
-              <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Total SKUs</div>
-              <div className="text-2xl font-semibold mt-1 text-gray-900 dark:text-white">{summary.totalSkus.toLocaleString()}</div>
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total SKUs</div>
+              <div className="text-2xl font-semibold mt-1">{summary.totalSkus.toLocaleString()}</div>
             </CardContent>
           </Card>
-          <Card className="shadow-sm border border-gray-200 dark:border-gray-700">
+          <Card className="shadow-sm">
             <CardContent className="p-4">
-              <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Qty Sellable</div>
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Qty Sellable</div>
               <div className="text-2xl font-semibold mt-1 text-green-600 dark:text-green-500">{summary.totalQtySellable.toLocaleString()}</div>
             </CardContent>
           </Card>
-          <Card className="shadow-sm border border-gray-200 dark:border-gray-700">
+          <Card className="shadow-sm">
             <CardContent className="p-4">
-              <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Qty Non-Sellable</div>
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Qty Non-Sellable</div>
               <div className="text-2xl font-semibold mt-1 text-amber-600 dark:text-amber-500">{summary.totalQtyNonSellable.toLocaleString()}</div>
             </CardContent>
           </Card>
-          <Card className="shadow-sm border border-gray-200 dark:border-gray-700">
+          <Card className="shadow-sm">
             <CardContent className="p-4">
-              <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">SKUs Non-Sellable</div>
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">SKUs Non-Sellable</div>
               <div className="text-2xl font-semibold mt-1 text-amber-600 dark:text-amber-500">{summary.skusNonSellable.toLocaleString()}</div>
             </CardContent>
           </Card>
@@ -371,7 +371,7 @@ export default function InventoryPage() {
 
       {/* Filters */}
       {flatInventory.length > 0 && (
-        <Card className="mb-4 shadow-sm border border-gray-200 dark:border-gray-700">
+        <Card className="mb-4 shadow-sm">
           <CardContent className="p-3">
             <div className="flex flex-wrap gap-3 items-center justify-between">
               <div className="flex flex-wrap gap-2 items-center">
@@ -451,11 +451,11 @@ export default function InventoryPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card className="shadow-sm border border-gray-200 dark:border-gray-700">
+        <Card className="shadow-sm">
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                <thead className="bg-secondary/50 border-b">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
                       <Button variant="ghost" className="h-auto p-0 font-semibold hover:bg-transparent text-xs" onClick={() => sortData('productName')}>
@@ -490,9 +490,9 @@ export default function InventoryPage() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody className="divide-y">
                   {filteredInventory.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <tr key={idx} className="hover:bg-secondary/30 transition-colors">
                       <td className="px-4 py-3.5">
                         <div className="font-medium text-gray-900 dark:text-white text-sm">{item.productName}</div>
                         <div className="text-xs text-gray-500 dark:text-gray-400 font-mono mt-0.5">SKU {item.sku}</div>
