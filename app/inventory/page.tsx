@@ -615,7 +615,7 @@ export default function InventoryPage() {
           <CardContent className="py-16 text-center">
             <Package className="w-12 h-12 mx-auto mb-4 text-gray-400" />
             <p className="text-gray-600 text-lg mb-4">Ready to load inventory</p>
-            <Button onClick={loadInventory} size="lg">
+            <Button onClick={loadInventoryFromSupabase} size="lg">
               <Package className="w-4 h-4 mr-2" />
               Load All Inventory
             </Button>
