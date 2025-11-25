@@ -5,6 +5,8 @@ import { NextRequest, NextResponse } from "next/server";
  * Uses warehouse_products with proper pagination structure
  */
 export async function GET(request: NextRequest) {
+  const requestStartTime = Date.now()
+  
   try {
     const authHeader = request.headers.get('authorization')
     const accessToken = authHeader?.replace('Bearer ', '')
@@ -70,7 +72,7 @@ export async function GET(request: NextRequest) {
       cursor: cursor
     }
 
-    console.log('📤 Fetching page...')
+    console.log(`⏱️ 📤 Fetching page... (${((Date.now() - requestStartTime) / 1000).toFixed(2)}s elapsed)`)
 
     const response = await fetch('https://public-api.shiphero.com/graphql', {
       method: 'POST',
@@ -104,7 +106,8 @@ export async function GET(request: NextRequest) {
       }, { status: 500 });
     }
 
-    console.log('✅ Page fetched')
+    const elapsed = ((Date.now() - requestStartTime) / 1000).toFixed(2)
+    console.log(`⏱️ [${elapsed}s] ✅ Page fetched`)
 
     // Return full ShipHero response for frontend processing
     return NextResponse.json({

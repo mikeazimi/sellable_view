@@ -146,6 +146,13 @@ export default function InventoryPage() {
       return
     }
 
+    // Start timing
+    const startTime = Date.now()
+    const startTimestamp = new Date().toLocaleTimeString()
+    console.log('⏱️ ============================================')
+    console.log(`⏱️ REFRESH STARTED at ${startTimestamp}`)
+    console.log('⏱️ ============================================')
+
     setIsLoading(true)
     try {
       toast({
@@ -167,16 +174,29 @@ export default function InventoryPage() {
       
       if (result.success) {
         // Reload from Supabase to show updated data
+        const reloadStart = Date.now()
+        console.log(`⏱️ Reloading from Supabase... (${((reloadStart - startTime) / 1000).toFixed(2)}s elapsed)`)
+        
         await loadFromSupabase()
+        
+        const totalTime = Date.now() - startTime
+        const endTimestamp = new Date().toLocaleTimeString()
+        
+        console.log('⏱️ ============================================')
+        console.log(`⏱️ REFRESH COMPLETE at ${endTimestamp}`)
+        console.log(`⏱️ Total Duration: ${(totalTime / 1000).toFixed(2)} seconds (${(totalTime / 60000).toFixed(2)} minutes)`)
+        console.log('⏱️ ============================================')
+        
         toast({
           title: 'Refresh complete',
-          description: 'Supabase updated with latest ShipHero data',
+          description: `Updated in ${(totalTime / 1000).toFixed(1)}s`,
         })
       } else {
         throw new Error(result.error || 'Failed to refresh')
       }
     } catch (error: any) {
-      console.error('Refresh error:', error)
+      const totalTime = Date.now() - startTime
+      console.error(`⏱️ Refresh error after ${(totalTime / 1000).toFixed(2)}s:`, error)
       toast({
         title: 'Refresh failed',
         description: error.message,

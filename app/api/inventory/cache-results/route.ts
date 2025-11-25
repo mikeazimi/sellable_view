@@ -5,6 +5,9 @@ import { supabaseAdmin } from "@/lib/supabase";
  * Cache inventory results to Supabase as they're fetched from ShipHero
  */
 export async function POST(request: NextRequest) {
+  const requestStartTime = Date.now()
+  const startTimestamp = new Date().toLocaleString()
+  
   try {
     const body = await request.json()
     const { items, customer_account_id, is_final = false } = body
@@ -13,7 +16,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "items array required" }, { status: 400 });
     }
 
-    console.log(`💾 Caching ${items.length} items to Supabase... (final: ${is_final})`)
+    const elapsed = ((Date.now() - requestStartTime) / 1000).toFixed(2)
+    console.log(`⏱️ [${elapsed}s] 💾 Caching ${items.length} items to Supabase... (final: ${is_final})`)
 
     // If this is the final save, delete old data first for clean slate
     if (is_final) {
@@ -55,7 +59,8 @@ export async function POST(request: NextRequest) {
       throw new Error(error.message)
     }
 
-    console.log(`✅ Cached ${records.length} items`)
+    const totalElapsed = ((Date.now() - requestStartTime) / 1000).toFixed(2)
+    console.log(`⏱️ [${totalElapsed}s] ✅ Cached ${records.length} items`)
 
     return NextResponse.json({
       success: true,
