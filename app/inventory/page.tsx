@@ -288,18 +288,7 @@ export default function InventoryPage() {
 
         setFlatInventory([...allItems])
 
-        // Cache this batch to Supabase for instant filtering later
-        if (allItems.length > 0 && pageCount % 3 === 0) {
-          // Cache every 3 pages
-          fetch('/api/inventory/cache-results', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              items: allItems,
-              customer_account_id: accountIdToUse
-            })
-          }).catch(err => console.warn('Cache failed:', err))
-        }
+        // Skip intermediate caching - only do final save to avoid partial data
 
         hasNextPage = warehouseData?.pageInfo?.hasNextPage || false
         cursor = warehouseData?.pageInfo?.endCursor || null

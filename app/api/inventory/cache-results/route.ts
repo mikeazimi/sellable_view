@@ -7,13 +7,29 @@ import { supabaseAdmin } from "@/lib/supabase";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { items, customer_account_id } = body
+    const { items, customer_account_id, is_final = false } = body
 
     if (!items || !Array.isArray(items)) {
       return NextResponse.json({ success: false, error: "items array required" }, { status: 400 });
     }
 
-    console.log(`💾 Caching ${items.length} items to Supabase...`)
+    console.log(`💾 Caching ${items.length} items to Supabase... (final: ${is_final})`)
+
+    // If this is the final save, delete old data first for clean slate
+    if (is_final) {
+      console.log(`🗑️  Deleting old inventory for customer ${customer_account_id}...`)
+      const { error: deleteError } = await supabaseAdmin
+        .from('inventory_locations')
+        .delete()
+        .eq('account_id', customer_account_id)
+
+      if (deleteError) {
+        console.error('Delete error:', deleteError)
+        // Don't throw - continue with insert even if delete fails
+      } else {
+        console.log('✅ Old inventory deleted')
+      }
+    }
 
     // Transform and prepare for upsert
     const records = items.map((item: any) => ({
@@ -29,13 +45,10 @@ export async function POST(request: NextRequest) {
       last_synced_at: new Date().toISOString()
     }))
 
-    // Upsert to Supabase (merge with existing)
+    // Insert fresh data
     const { error } = await supabaseAdmin
       .from('inventory_locations')
-      .upsert(records, { 
-        onConflict: 'sku,location_name,account_id',
-        ignoreDuplicates: false
-      })
+      .insert(records)
 
     if (error) {
       console.error('Cache error:', error)

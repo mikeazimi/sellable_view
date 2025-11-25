@@ -8,13 +8,28 @@ import { supabaseAdmin } from "@/lib/supabase";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { chunk, customer_account_id } = body
+    const { chunk, customer_account_id, is_first_chunk = false } = body
 
     if (!chunk || !Array.isArray(chunk)) {
       return NextResponse.json({ success: false, error: "chunk array required" }, { status: 400 });
     }
 
-    console.log(`💾 Uploading ${chunk.length} inventory records to Supabase...`)
+    console.log(`💾 Uploading ${chunk.length} inventory records to Supabase... (first: ${is_first_chunk})`)
+
+    // Delete old data on first chunk for clean slate
+    if (is_first_chunk) {
+      console.log(`🗑️  Deleting old inventory for customer ${customer_account_id}...`)
+      const { error: deleteError } = await supabaseAdmin
+        .from('inventory_locations')
+        .delete()
+        .eq('account_id', customer_account_id)
+
+      if (deleteError) {
+        console.error('Delete error:', deleteError)
+      } else {
+        console.log('✅ Old inventory deleted - starting fresh')
+      }
+    }
 
     // Transform CSV data to inventory_locations format
     const records = chunk.map((row: any) => ({
@@ -33,13 +48,10 @@ export async function POST(request: NextRequest) {
     // Filter out zero quantity
     const validRecords = records.filter(r => r.quantity > 0)
 
-    // Upsert to Supabase
+    // Insert fresh data
     const { error } = await supabaseAdmin
       .from('inventory_locations')
-      .upsert(validRecords, { 
-        onConflict: 'sku,location_name,account_id',
-        ignoreDuplicates: false
-      })
+      .insert(validRecords)
 
     if (error) {
       console.error('Upload error:', error)

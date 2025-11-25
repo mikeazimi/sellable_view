@@ -85,6 +85,7 @@ export default function AdminPage() {
 
       for (let i = 0; i < inventoryCsvData.length; i += chunkSize) {
         const chunk = inventoryCsvData.slice(i, i + chunkSize)
+        const isFirstChunk = i === 0
         setInventoryUploadProgress(`Uploading ${i + 1}-${i + chunk.length} of ${inventoryCsvData.length}...`)
 
         const response = await fetch('/api/upload-inventory-snapshot', {
@@ -92,7 +93,8 @@ export default function AdminPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             chunk,
-            customer_account_id: accountId
+            customer_account_id: accountId,
+            is_first_chunk: isFirstChunk // Delete old data on first chunk
           })
         })
 
