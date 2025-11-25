@@ -31,14 +31,23 @@ export async function POST(request: NextRequest) {
     let hasNextPage = true
     let pageCount = 0
 
+    // Helper to delay between requests (rate limiting)
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
     while (hasNextPage) {
       pageCount++
       const pageStart = Date.now()
       
+      // Add 2 second delay between requests to avoid rate limits (except first request)
+      if (pageCount > 1) {
+        console.log(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] ⏸️  Waiting 2s for rate limit...`)
+        await delay(2000)
+      }
+      
       const query = `
         query ($customer_account_id: String, $cursor: String) {
           warehouse_products(customer_account_id: $customer_account_id, active: true) {
-            data(first: 45, after: $cursor) {
+            data(first: 25, after: $cursor) {
               pageInfo {
                 hasNextPage
                 endCursor
@@ -94,7 +103,16 @@ export async function POST(request: NextRequest) {
       const result = await response.json()
 
       if (result.errors) {
-        throw new Error(result.errors[0].message)
+        const errorMsg = result.errors[0].message
+        // If rate limited, wait and retry
+        if (errorMsg.includes('not enough credits')) {
+          console.log(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] ⚠️  Rate limited - waiting 3s and retrying...`)
+          await delay(3000)
+          // Retry this same page
+          pageCount--
+          continue
+        }
+        throw new Error(errorMsg)
       }
 
       const data = result.data?.warehouse_products?.data
