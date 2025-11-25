@@ -31,25 +31,38 @@ export async function GET(request: NextRequest) {
       }
 
       const mutation = `
-        mutation CreateInventorySnapshot($customer_account_id: String!, $email: String!) {
-          inventory_snapshot_create(
+        mutation GenerateInventorySnapshot(
+          $customer_account_id: String
+          $has_inventory: Boolean
+          $new_format: Boolean
+          $notification_email: String
+        ) {
+          inventory_generate_snapshot(
             data: {
               customer_account_id: $customer_account_id
-              email: $email
-              has_inventory: true
-              new_format: true
+              has_inventory: $has_inventory
+              new_format: $new_format
+              notification_email: $notification_email
             }
           ) {
             request_id
             complexity
-            snapshot_id
+            snapshot {
+              snapshot_id
+              status
+              snapshot_url
+              error
+              created_at
+            }
           }
         }
       `
 
       const variables = {
         customer_account_id: customerAccountId,
-        email
+        has_inventory: true,
+        new_format: true,
+        notification_email: email
       }
 
       console.log('🚀 Creating snapshot...')
@@ -73,14 +86,16 @@ export async function GET(request: NextRequest) {
         throw new Error(result.errors[0].message)
       }
 
-      const data = result.data?.inventory_snapshot_create
-      console.log(`✅ Snapshot created: ${data.snapshot_id}`)
+      const data = result.data?.inventory_generate_snapshot
+      const snapshot = data.snapshot
+      console.log(`✅ Snapshot created: ${snapshot.snapshot_id}`)
 
       return NextResponse.json({
         success: true,
-        snapshot_id: data.snapshot_id,
+        snapshot_id: snapshot.snapshot_id,
         request_id: data.request_id,
-        complexity: data.complexity
+        complexity: data.complexity,
+        status: snapshot.status
       });
     }
 
@@ -100,12 +115,12 @@ export async function GET(request: NextRequest) {
           inventory_snapshot(snapshot_id: $snapshot_id) {
             request_id
             complexity
-            data {
+            snapshot {
               snapshot_id
-              link
+              snapshot_url
               status
               error
-              created_date
+              created_at
             }
           }
         }
@@ -134,16 +149,16 @@ export async function GET(request: NextRequest) {
         throw new Error(result.errors[0].message)
       }
 
-      const snapshot = result.data?.inventory_snapshot?.data
+      const snapshot = result.data?.inventory_snapshot?.snapshot
       console.log(`   Status: ${snapshot.status}`)
       
       return NextResponse.json({
         success: true,
         snapshot_id: snapshot.snapshot_id,
-        link: snapshot.link,
+        link: snapshot.snapshot_url,
         status: snapshot.status,
         error: snapshot.error,
-        created_date: snapshot.created_date
+        created_date: snapshot.created_at
       });
     }
 
