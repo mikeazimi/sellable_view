@@ -129,10 +129,15 @@ export async function POST(request: NextRequest) {
         throw new Error(errorMsg)
       }
 
-      const data = result.data?.warehouse_products?.data
+      const warehouseProducts = result.data?.warehouse_products
+      const data = warehouseProducts?.data
       if (!data) {
         throw new Error('No data returned from ShipHero')
       }
+
+      // Extract complexity/credits info from response
+      const complexity = warehouseProducts?.complexity || 'N/A'
+      const requestId = warehouseProducts?.request_id || 'N/A'
 
       // Process this page
       const products = data.edges || []
@@ -159,7 +164,8 @@ export async function POST(request: NextRequest) {
       }
 
       const pageElapsed = ((Date.now() - pageStart) / 1000).toFixed(2)
-      console.log(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] ✅ Page ${pageCount} complete (${pageElapsed}s) - ${allItems.length} items so far`)
+      console.log(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] ✅ Page ${pageCount} complete (${pageElapsed}s)`)
+      console.log(`   📊 Items: ${allItems.length} total | Complexity: ${complexity} credits | Request ID: ${requestId}`)
 
       hasNextPage = data.pageInfo.hasNextPage
       cursor = data.pageInfo.endCursor
