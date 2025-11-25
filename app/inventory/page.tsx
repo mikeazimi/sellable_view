@@ -482,23 +482,7 @@ export default function InventoryPage() {
       {isAuthenticated && flatInventory.length === 0 && !isLoading && (
         <Card className="mb-6">
           <CardContent className="pt-6 space-y-6">
-            {/* Customer Account ID Input */}
-            <div>
-              <h3 className="font-semibold mb-2">Customer Account ID</h3>
-              <p className="text-sm text-gray-500 mb-3">Enter the account ID number (e.g., 88774 for Donni HQ)</p>
-              <Input
-                type="text"
-                value={customerAccountId}
-                onChange={(e) => setCustomerAccountId(e.target.value)}
-                placeholder="88774"
-                className="w-full md:w-96"
-              />
-              <p className="text-xs text-gray-500 mt-2">
-                Just type the numeric ID - we'll handle the conversion automatically
-              </p>
-            </div>
-
-            {/* Pre-Load Data Filters */}
+            {/* Data Filters */}
             <div>
               <h3 className="font-semibold mb-2">Data Filters (Apply Before Loading)</h3>
               <p className="text-sm text-gray-500 mb-3">Filter data at the source - loads much faster!</p>
