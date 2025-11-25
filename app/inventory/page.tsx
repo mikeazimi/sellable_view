@@ -151,8 +151,8 @@ export default function InventoryPage() {
     const startTimestamp = new Date().toLocaleTimeString()
     console.log('⏱️ ============================================')
     console.log(`⏱️ REFRESH STARTED at ${startTimestamp}`)
-    console.log(`⏱️ Config: 100 products/page, 20 locations/product (~2000 credits/page)`)
-    console.log(`⏱️ Delays: 8s between pages, 15s auto-wait on throttle`)
+    console.log(`⏱️ Config: 20 products/page, 199 locations/product (~3,980 credits/page)`)
+    console.log(`⏱️ Delays: 10s between pages, 30s backend auto-wait on throttle`)
     console.log('⏱️ ============================================')
 
     setIsLoading(true)
@@ -230,19 +230,34 @@ export default function InventoryPage() {
         }
 
         const pageElapsed = ((Date.now() - pageStart) / 1000).toFixed(2)
-        totalCreditsUsed += result.complexity || 0
+        const creditsUsed = result.credits_used || 0
+        totalCreditsUsed += creditsUsed
+        const avgCredits = Math.round(totalCreditsUsed / pageCount)
 
         console.log(`⏱️ [${((Date.now() - startTime) / 1000).toFixed(2)}s] ✅ Page ${pageCount} complete (${pageElapsed}s)`)
-        console.log(`   📊 Items: ${allItems.length} total | Page used: ${result.complexity} credits | Total used: ${totalCreditsUsed} credits`)
+        
+        // Comprehensive credit monitoring
+        if (result.remaining_credits !== null && result.remaining_credits !== undefined) {
+          console.log(`💳 Page ${pageCount} | Used: ${creditsUsed.toLocaleString()} credits | Remaining: ${result.remaining_credits.toLocaleString()} | Total used: ${totalCreditsUsed.toLocaleString()} | Avg: ${avgCredits.toLocaleString()}/page`)
+        } else {
+          console.log(`💳 Page ${pageCount} | Used: ${creditsUsed.toLocaleString()} credits | Total used: ${totalCreditsUsed.toLocaleString()} | Avg: ${avgCredits.toLocaleString()}/page`)
+        }
+        
+        // Log if throttling occurred
+        if (result.was_throttled) {
+          console.log(`⚠️  Page ${pageCount} was throttled (needed ${creditsUsed}, had ${result.remaining_credits || 'N/A'}). Backend waited ${result.throttle_wait_time}s and retried.`)
+        }
+        
+        console.log(`   📦 Items: ${allItems.length} total`)
 
         // Check if more pages
         hasNextPage = result.pageInfo.hasNextPage
         cursor = result.pageInfo.endCursor
 
-        // Proactive delay to manage credit rate (8 seconds between pages)
+        // Proactive delay to manage credit rate (10 seconds between pages)
         if (hasNextPage) {
-          console.log(`⏸️  Waiting 8s to manage credit rate...`)
-          await new Promise(resolve => setTimeout(resolve, 8000))
+          console.log(`⏸️  Waiting 10s before next page...`)
+          await new Promise(resolve => setTimeout(resolve, 10000))
         }
       }
 

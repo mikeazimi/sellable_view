@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
         warehouse_products(customer_account_id: $customer_account_id, active: true) {
           request_id
           complexity
-          data(first: 100, after: $cursor) {
+          data(first: 20, after: $cursor) {
             pageInfo {
               hasNextPage
               endCursor
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
                 product {
                   name
                 }
-                locations(first: 20) {
+                locations(first: 199) {
                   edges {
                     node {
                       quantity
@@ -79,6 +79,9 @@ export async function GET(request: NextRequest) {
     let retryCount = 0
     const maxRetries = 3
     let result: any = null
+    let wasThrottled = false
+    let throttleWaitTime = 0
+    let remainingCredits: number | null = null
 
     while (retryCount <= maxRetries) {
       const response = await fetch('https://public-api.shiphero.com/graphql', {
@@ -97,20 +100,22 @@ export async function GET(request: NextRequest) {
       result = await response.json()
 
       // Check for credit throttling error (code 30)
-      // Error structure: { code: 30, message: "...", ... } at root level
       if (result.errors && result.errors[0]?.code === 30) {
         const error = result.errors[0]
         const errorMsg = error.message
         
-        // Always wait 15 seconds on credit throttle (more aggressive recovery)
-        const totalWait = 15
+        // Fixed 30 second wait on credit throttle
+        const waitTime = 30
+        wasThrottled = true
+        throttleWaitTime = waitTime
+        remainingCredits = error.remaining_credits || null
         
         console.log(`⚠️  Credit throttle hit (attempt ${retryCount + 1}/${maxRetries + 1})`)
         console.log(`⚠️  Required: ${error.required_credits} credits | Available: ${error.remaining_credits}`)
-        console.log(`⏸️  Waiting ${totalWait}s for credit recovery...`)
+        console.log(`⏱️  Credit throttle detected. Waiting ${waitTime}s to allow credits to replenish...`)
         
         if (retryCount < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, totalWait * 1000))
+          await new Promise(resolve => setTimeout(resolve, waitTime * 1000))
           retryCount++
           continue // Retry the request
         } else {
@@ -143,16 +148,25 @@ export async function GET(request: NextRequest) {
     }
 
     const elapsed = ((Date.now() - requestStartTime) / 1000).toFixed(2)
-    console.log(`✅ Page fetched in ${elapsed}s | Complexity: ${warehouseProducts.complexity} | Retries: ${retryCount}`)
+    const creditsUsed = warehouseProducts.complexity || 0
+    
+    console.log(`✅ Page fetched in ${elapsed}s | Complexity: ${creditsUsed} | Retries: ${retryCount}`)
+    if (wasThrottled) {
+      console.log(`⚠️  Was throttled - waited ${throttleWaitTime}s`)
+    }
 
-    // Return the single page of data
+    // Return the single page of data with credit monitoring info
     return NextResponse.json({
       success: true,
       data: warehouseProducts.data,
-      complexity: warehouseProducts.complexity,
+      complexity: creditsUsed,
       request_id: warehouseProducts.request_id,
       pageInfo: warehouseProducts.data.pageInfo,
-      fetch_time: elapsed
+      fetch_time: elapsed,
+      credits_used: creditsUsed,
+      remaining_credits: remainingCredits,
+      was_throttled: wasThrottled,
+      throttle_wait_time: throttleWaitTime
     });
 
   } catch (error: any) {
