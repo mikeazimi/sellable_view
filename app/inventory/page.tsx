@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Package, Download, RefreshCw, RotateCw, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { Package, Download, RefreshCw, RotateCw, ArrowUpDown, ArrowUp, ArrowDown, CheckCircle2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { AuthManager } from '@/lib/auth-manager'
 
@@ -261,22 +261,22 @@ export default function InventoryPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-screen">
       {/* Header with Actions */}
       <div className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            Inventory
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-1">
+            Item Locations
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Customer: {getSelectedAccountName()} ({selectedAccountId})
-            {flatInventory.length > 0 && ` • ${filteredInventory.length.toLocaleString()} records`}
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {getSelectedAccountName()} ({selectedAccountId})
+            {flatInventory.length > 0 && ` • ${filteredInventory.length.toLocaleString()} items`}
           </p>
         </div>
         
         {/* Top Right Actions */}
         {isAuthenticated && (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {/* Account Selector */}
             {accountIds.length > 1 && (
               <select
@@ -285,7 +285,7 @@ export default function InventoryPage() {
                   setSelectedAccountId(e.target.value)
                   setFlatInventory([])
                 }}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 {accountIds.map((account) => (
                   <option key={account.id} value={account.value}>
@@ -300,6 +300,7 @@ export default function InventoryPage() {
               onClick={loadFromSupabase}
               disabled={isLoading}
               variant="outline"
+              className="text-sm"
             >
               <RotateCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
               Reload Data
@@ -309,7 +310,7 @@ export default function InventoryPage() {
             <Button
               onClick={refreshFromShipHero}
               disabled={isLoading}
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-blue-600 hover:bg-blue-700 text-white text-sm"
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh from ShipHero
@@ -320,29 +321,29 @@ export default function InventoryPage() {
 
       {/* Summary Stats */}
       {flatInventory.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <Card>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <Card className="shadow-sm border border-gray-200 dark:border-gray-700">
             <CardContent className="p-4">
-              <div className="text-sm text-gray-500 dark:text-gray-400">Total SKUs</div>
-              <div className="text-2xl font-bold">{summary.totalSkus.toLocaleString()}</div>
+              <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Total SKUs</div>
+              <div className="text-2xl font-semibold mt-1 text-gray-900 dark:text-white">{summary.totalSkus.toLocaleString()}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="shadow-sm border border-gray-200 dark:border-gray-700">
             <CardContent className="p-4">
-              <div className="text-sm text-gray-500 dark:text-gray-400">Qty Sellable</div>
-              <div className="text-2xl font-bold text-green-600">{summary.totalQtySellable.toLocaleString()}</div>
+              <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Qty Sellable</div>
+              <div className="text-2xl font-semibold mt-1 text-green-600 dark:text-green-500">{summary.totalQtySellable.toLocaleString()}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="shadow-sm border border-gray-200 dark:border-gray-700">
             <CardContent className="p-4">
-              <div className="text-sm text-gray-500 dark:text-gray-400">Qty Non-Sellable</div>
-              <div className="text-2xl font-bold text-amber-600">{summary.totalQtyNonSellable.toLocaleString()}</div>
+              <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Qty Non-Sellable</div>
+              <div className="text-2xl font-semibold mt-1 text-amber-600 dark:text-amber-500">{summary.totalQtyNonSellable.toLocaleString()}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="shadow-sm border border-gray-200 dark:border-gray-700">
             <CardContent className="p-4">
-              <div className="text-sm text-gray-500 dark:text-gray-400">SKUs Non-Sellable</div>
-              <div className="text-2xl font-bold text-amber-600">{summary.skusNonSellable.toLocaleString()}</div>
+              <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">SKUs Non-Sellable</div>
+              <div className="text-2xl font-semibold mt-1 text-amber-600 dark:text-amber-500">{summary.skusNonSellable.toLocaleString()}</div>
             </CardContent>
           </Card>
         </div>
@@ -350,41 +351,36 @@ export default function InventoryPage() {
 
       {/* Filters */}
       {flatInventory.length > 0 && (
-        <Card className="mb-4">
-          <CardContent className="p-4">
-            <div className="flex flex-wrap gap-4 items-center justify-between">
-              <div className="flex flex-wrap gap-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Sellable:</span>
-                  <select
-                    value={statusFilters.sellable}
-                    onChange={(e) => setStatusFilters(prev => ({ ...prev, sellable: e.target.value as any }))}
-                    className="px-3 py-1.5 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-800"
-                  >
-                    <option value="all">All</option>
-                    <option value="sellable">Sellable Only</option>
-                    <option value="non-sellable">Non-Sellable Only</option>
-                  </select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Pickable:</span>
-                  <select
-                    value={statusFilters.pickable}
-                    onChange={(e) => setStatusFilters(prev => ({ ...prev, pickable: e.target.value as any }))}
-                    className="px-3 py-1.5 border border-gray-300 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-800"
-                  >
-                    <option value="all">All</option>
-                    <option value="pickable">Pickable Only</option>
-                    <option value="non-pickable">Non-Pickable Only</option>
-                  </select>
-                </div>
-                <div className="text-sm text-gray-500">
-                  Showing {filteredInventory.length.toLocaleString()} of {flatInventory.length.toLocaleString()} records
-                </div>
+        <Card className="mb-4 shadow-sm border border-gray-200 dark:border-gray-700">
+          <CardContent className="p-3">
+            <div className="flex flex-wrap gap-3 items-center justify-between">
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-sm text-gray-600 dark:text-gray-400">Filters:</span>
+                <select
+                  value={statusFilters.sellable}
+                  onChange={(e) => setStatusFilters(prev => ({ ...prev, sellable: e.target.value as any }))}
+                  className="px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">All Sellable</option>
+                  <option value="sellable">Sellable</option>
+                  <option value="non-sellable">Non-Sellable</option>
+                </select>
+                <select
+                  value={statusFilters.pickable}
+                  onChange={(e) => setStatusFilters(prev => ({ ...prev, pickable: e.target.value as any }))}
+                  className="px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">All Pickable</option>
+                  <option value="pickable">Pickable</option>
+                  <option value="non-pickable">Non-Pickable</option>
+                </select>
+                <span className="text-xs text-gray-500 ml-2">
+                  {filteredInventory.length.toLocaleString()} of {flatInventory.length.toLocaleString()} items
+                </span>
               </div>
-              <Button onClick={exportToCSV} variant="outline" size="sm">
-                <Download className="w-4 h-4 mr-2" />
-                Export CSV
+              <Button onClick={exportToCSV} variant="outline" size="sm" className="text-sm">
+                <Download className="w-4 h-4 mr-1.5" />
+                Export
               </Button>
             </div>
           </CardContent>
@@ -435,65 +431,69 @@ export default function InventoryPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card className="shadow-sm border border-gray-200 dark:border-gray-700">
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-800 border-b">
+                <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                   <tr>
-                    <th className="px-4 py-3 text-left">
-                      <Button variant="ghost" className="h-auto p-0 font-semibold hover:bg-transparent" onClick={() => sortData('productName')}>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                      <Button variant="ghost" className="h-auto p-0 font-semibold hover:bg-transparent text-xs" onClick={() => sortData('productName')}>
                         Item {getSortIcon('productName')}
                       </Button>
                     </th>
-                    <th className="px-4 py-3 text-left">
-                      <Button variant="ghost" className="h-auto p-0 font-semibold hover:bg-transparent" onClick={() => sortData('warehouse')}>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                      <Button variant="ghost" className="h-auto p-0 font-semibold hover:bg-transparent text-xs" onClick={() => sortData('warehouse')}>
                         Warehouse {getSortIcon('warehouse')}
                       </Button>
                     </th>
-                    <th className="px-4 py-3 text-left">
-                      <Button variant="ghost" className="h-auto p-0 font-semibold hover:bg-transparent" onClick={() => sortData('location')}>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                      <Button variant="ghost" className="h-auto p-0 font-semibold hover:bg-transparent text-xs" onClick={() => sortData('location')}>
                         Location {getSortIcon('location')}
                       </Button>
                     </th>
-                    <th className="px-4 py-3 text-left">Type</th>
-                    <th className="px-4 py-3 text-left">
-                      <Button variant="ghost" className="h-auto p-0 font-semibold hover:bg-transparent" onClick={() => sortData('quantity')}>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Type</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                      <Button variant="ghost" className="h-auto p-0 font-semibold hover:bg-transparent text-xs" onClick={() => sortData('quantity')}>
                         Units {getSortIcon('quantity')}
                       </Button>
                     </th>
-                    <th className="px-4 py-3 text-center">
-                      <Button variant="ghost" className="h-auto p-0 font-semibold hover:bg-transparent" onClick={() => sortData('pickable')}>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                      <Button variant="ghost" className="h-auto p-0 font-semibold hover:bg-transparent text-xs" onClick={() => sortData('pickable')}>
                         Pickable {getSortIcon('pickable')}
                       </Button>
                     </th>
-                    <th className="px-4 py-3 text-center">
-                      <Button variant="ghost" className="h-auto p-0 font-semibold hover:bg-transparent" onClick={() => sortData('sellable')}>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                      <Button variant="ghost" className="h-auto p-0 font-semibold hover:bg-transparent text-xs" onClick={() => sortData('sellable')}>
                         Sellable {getSortIcon('sellable')}
                       </Button>
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                   {filteredInventory.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 border-b">
-                      <td className="px-4 py-3">
-                        <div className="font-medium">{item.productName}</div>
-                        <div className="text-xs text-gray-500 font-mono">SKU {item.sku}</div>
+                    <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                      <td className="px-4 py-3.5">
+                        <div className="font-medium text-gray-900 dark:text-white text-sm">{item.productName}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 font-mono mt-0.5">SKU {item.sku}</div>
                       </td>
-                      <td className="px-4 py-3">{item.warehouse}</td>
-                      <td className="px-4 py-3 font-mono text-sm">{item.location}</td>
-                      <td className="px-4 py-3 text-sm">{item.type}</td>
-                      <td className="px-4 py-3 font-semibold text-lg">{item.quantity.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={item.pickable ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-400'}>
-                          {item.pickable ? 'Yes' : 'No'}
-                        </span>
+                      <td className="px-4 py-3.5 text-sm text-gray-700 dark:text-gray-300">{item.warehouse}</td>
+                      <td className="px-4 py-3.5 font-mono text-sm text-gray-900 dark:text-white">{item.location}</td>
+                      <td className="px-4 py-3.5 text-sm text-gray-600 dark:text-gray-400">{item.type}</td>
+                      <td className="px-4 py-3.5 font-semibold text-sm text-gray-900 dark:text-white">{item.quantity.toLocaleString()}</td>
+                      <td className="px-4 py-3.5 text-center">
+                        {item.pickable ? (
+                          <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-500 mx-auto" />
+                        ) : (
+                          <span className="text-gray-300 dark:text-gray-600">—</span>
+                        )}
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={item.sellable ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-400'}>
-                          {item.sellable ? 'Yes' : 'No'}
-                        </span>
+                      <td className="px-4 py-3.5 text-center">
+                        {item.sellable ? (
+                          <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-500 mx-auto" />
+                        ) : (
+                          <span className="text-gray-300 dark:text-gray-600">—</span>
+                        )}
                       </td>
                     </tr>
                   ))}
