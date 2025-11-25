@@ -198,13 +198,18 @@ export default function InventoryPage() {
       }
       
       if (supabaseResult.empty_database) {
-        // Database is empty - show error
-        throw new Error('No inventory data cached. Please run snapshot sync in Admin page first.')
+        // Database is empty - use live ShipHero query
+        console.log('⚠️ Database empty, using live ShipHero query')
+        toast({
+          title: 'Using live data',
+          description: 'Querying ShipHero directly (slower but works)',
+        })
+        // Fall through to ShipHero query below
+      } else {
+        // If we get here, there was an error - fall through to ShipHero query as backup
+        console.warn('Supabase query failed, falling back to ShipHero:', supabaseResult.error)
+        console.log('🔄 Falling back to real-time ShipHero query...')
       }
-      
-      // If we get here, there was an error - fall through to ShipHero query as backup
-      console.warn('Supabase query failed, falling back to ShipHero:', supabaseResult.error)
-      console.log('🔄 Falling back to real-time ShipHero query...')
       
       // Step 1: Get filtered location names from Supabase (INSTANT!)
       let allowedLocations: Set<string> | null = null
