@@ -161,7 +161,7 @@ export default function InventoryPage() {
       })
 
       // Query ShipHero and cache results
-      const response = await fetch('/api/inventory/cache-results', {
+      const response = await fetch('/api/refresh-inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
