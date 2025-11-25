@@ -71,6 +71,7 @@ export default function InventoryPage() {
     sellable: 'all',
     pickable: 'all'
   })
+  const [forceRefresh, setForceRefresh] = useState(false)
   const { toast } = useToast()
 
   // Apply status filters FIRST
@@ -140,7 +141,7 @@ export default function InventoryPage() {
     setColumnFilters(prev => ({ ...prev, [column]: !prev[column] }))
   }
 
-  const loadInventory = async () => {
+  const loadInventory = async (skipCache = false) => {
     const accessToken = AuthManager.getValidToken()
     if (!accessToken) {
       toast({
@@ -171,19 +172,21 @@ export default function InventoryPage() {
         console.log(`Converted ${customerAccountId} to UUID: ${accountIdToUse}`)
       }
       
-      console.log('🚀 Loading from Supabase cache (NOT ShipHero!)')
-      
-      // Try Supabase first
-      const supabaseParams = new URLSearchParams({
-        customer_account_id: accountIdToUse,
-        sellable: preLoadFilters.sellable,
-        pickable: preLoadFilters.pickable
-      })
-      
-      const supabaseResponse = await fetch(`/api/inventory/supabase?${supabaseParams.toString()}`)
-      const supabaseResult = await supabaseResponse.json()
-      
-      if (supabaseResult.success) {
+      // Skip cache if force refresh
+      if (!skipCache) {
+        console.log('🚀 Loading from Supabase cache (NOT ShipHero!)')
+        
+        // Try Supabase first
+        const supabaseParams = new URLSearchParams({
+          customer_account_id: accountIdToUse,
+          sellable: preLoadFilters.sellable,
+          pickable: preLoadFilters.pickable
+        })
+        
+        const supabaseResponse = await fetch(`/api/inventory/supabase?${supabaseParams.toString()}`)
+        const supabaseResult = await supabaseResponse.json()
+        
+        if (supabaseResult.success) {
         // SUCCESS - Got data from Supabase!
         console.log(`✅ Loaded ${supabaseResult.data.length} records from Supabase (instant!)`)
         
@@ -197,18 +200,21 @@ export default function InventoryPage() {
         return // Done - no ShipHero query needed!
       }
       
-      if (supabaseResult.empty_database) {
-        // Database is empty - use live ShipHero query
-        console.log('⚠️ Database empty, using live ShipHero query')
-        toast({
-          title: 'Using live data',
-          description: 'Querying ShipHero directly (slower but works)',
-        })
-        // Fall through to ShipHero query below
+        if (supabaseResult.empty_database) {
+          // Database is empty - use live ShipHero query
+          console.log('⚠️ Database empty, using live ShipHero query')
+          toast({
+            title: 'Using live data',
+            description: 'Querying ShipHero directly (slower but works)',
+          })
+          // Fall through to ShipHero query below
+        } else {
+          // If we get here, there was an error - fall through to ShipHero query as backup
+          console.warn('Supabase query failed, falling back to ShipHero:', supabaseResult.error)
+          console.log('🔄 Falling back to real-time ShipHero query...')
+        }
       } else {
-        // If we get here, there was an error - fall through to ShipHero query as backup
-        console.warn('Supabase query failed, falling back to ShipHero:', supabaseResult.error)
-        console.log('🔄 Falling back to real-time ShipHero query...')
+        console.log('🔄 Force refresh - skipping cache, querying ShipHero directly')
       }
       
       // Step 1: Get filtered location names from Supabase (INSTANT!)
@@ -478,11 +484,17 @@ export default function InventoryPage() {
               Export CSV
             </Button>
           )}
-          {isAuthenticated && (
-            <Button onClick={loadInventory} disabled={isLoading} variant="outline">
-              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-              {isLoading ? 'Loading...' : 'Refresh Data'}
-            </Button>
+          {isAuthenticated && flatInventory.length > 0 && (
+            <>
+              <Button onClick={() => loadInventory(false)} disabled={isLoading} variant="outline">
+                <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                {isLoading ? 'Loading...' : 'Refresh (Cache)'}
+              </Button>
+              <Button onClick={() => loadInventory(true)} disabled={isLoading} variant="outline">
+                <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                Force Refresh (ShipHero)
+              </Button>
+            </>
           )}
         </div>
       </div>
