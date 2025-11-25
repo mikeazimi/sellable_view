@@ -34,20 +34,34 @@ export async function POST(request: NextRequest) {
     // Helper to delay between requests (rate limiting)
     const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
+    // Smart delay: 4-8 seconds after every 5-10 pages
+    const getSmartDelay = (pageNum: number) => {
+      if (pageNum % 10 === 0) {
+        // Every 10th page: 6-8 second delay
+        return 6000 + Math.random() * 2000
+      } else if (pageNum % 5 === 0) {
+        // Every 5th page: 4-6 second delay
+        return 4000 + Math.random() * 2000
+      }
+      return 0 // No delay for other pages
+    }
+
     while (hasNextPage) {
       pageCount++
       const pageStart = Date.now()
       
-      // Add 2 second delay between requests to avoid rate limits (except first request)
-      if (pageCount > 1) {
-        console.log(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] ⏸️  Waiting 2s for rate limit...`)
-        await delay(2000)
+      // Apply smart delay after every 5-10 pages
+      const smartDelay = getSmartDelay(pageCount - 1) // Check previous page
+      if (smartDelay > 0) {
+        const delaySec = (smartDelay / 1000).toFixed(1)
+        console.log(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] ⏸️  Smart delay: ${delaySec}s (every ${(pageCount - 1) % 10 === 0 ? '10' : '5'} pages)`)
+        await delay(smartDelay)
       }
       
       const query = `
         query ($customer_account_id: String, $cursor: String) {
           warehouse_products(customer_account_id: $customer_account_id, active: true) {
-            data(first: 25, after: $cursor) {
+            data(first: 45, after: $cursor) {
               pageInfo {
                 hasNextPage
                 endCursor
