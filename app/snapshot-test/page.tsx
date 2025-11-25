@@ -10,7 +10,7 @@ import { AuthManager } from '@/lib/auth-manager'
 
 export default function SnapshotTestPage() {
   const [customerAccountId, setCustomerAccountId] = useState('Q3VzdG9tZXJBY2NvdW50Ojg4Nzc0')
-  const [email, setEmail] = useState('mike@dischub.com')
+  const [email, setEmail] = useState('mike.azimi@dischub.com')
   const [snapshotId, setSnapshotId] = useState('')
   const [status, setStatus] = useState('Ready')
   const [isRunning, setIsRunning] = useState(false)
