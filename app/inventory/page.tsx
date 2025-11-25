@@ -233,14 +233,20 @@ export default function InventoryPage() {
         const creditsUsed = result.credits_used || 0
         totalCreditsUsed += creditsUsed
         const avgCredits = Math.round(totalCreditsUsed / pageCount)
+        
+        // Calculate estimated remaining credits
+        // Note: ShipHero replenishes credits over time, so this is approximate
+        const estimatedRemaining = Math.max(0, 4004 - totalCreditsUsed)
 
         console.log(`⏱️ [${((Date.now() - startTime) / 1000).toFixed(2)}s] ✅ Page ${pageCount} complete (${pageElapsed}s)`)
         
         // Comprehensive credit monitoring
         if (result.remaining_credits !== null && result.remaining_credits !== undefined) {
-          console.log(`💳 Page ${pageCount} | Used: ${creditsUsed.toLocaleString()} credits | Remaining: ${result.remaining_credits.toLocaleString()} | Total used: ${totalCreditsUsed.toLocaleString()} | Avg: ${avgCredits.toLocaleString()}/page`)
+          // Actual remaining credits from ShipHero (when throttled)
+          console.log(`💳 Page ${pageCount} | Used: ${creditsUsed.toLocaleString()} credits | Remaining: ${result.remaining_credits.toLocaleString()} (actual) | Total used: ${totalCreditsUsed.toLocaleString()} | Avg: ${avgCredits.toLocaleString()}/page`)
         } else {
-          console.log(`💳 Page ${pageCount} | Used: ${creditsUsed.toLocaleString()} credits | Total used: ${totalCreditsUsed.toLocaleString()} | Avg: ${avgCredits.toLocaleString()}/page`)
+          // Estimated remaining credits (calculated)
+          console.log(`💳 Page ${pageCount} | Used: ${creditsUsed.toLocaleString()} credits | Remaining: ~${estimatedRemaining.toLocaleString()} (est) | Total used: ${totalCreditsUsed.toLocaleString()} | Avg: ${avgCredits.toLocaleString()}/page`)
         }
         
         // Log if throttling occurred
