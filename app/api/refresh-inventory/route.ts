@@ -69,18 +69,13 @@ export async function POST(request: NextRequest) {
       // Helper to delay between requests (rate limiting)
       const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-      // Aggressive timing: Complete in <4.5 minutes to avoid timeout
-      // Based on real fetch times: 85 pages × 3s avg = 255s
-      // Leaves 45s for delays max
+      // ULTRA-AGGRESSIVE timing: Must complete in <4:45 to avoid timeout
+      // 85 pages × 2.5s avg = 212s + 17s delays = ~229s (3.8 min) with buffer
       const getDelay = (pageNum: number) => {
-        const baseDelay = 400 // 0.4 seconds between ALL pages
+        const baseDelay = 200 // 0.2 seconds between ALL pages
         
-        if (pageNum % 10 === 0) {
-          return baseDelay + 2000 // 2.4s total (every 10th)
-        } else if (pageNum % 5 === 0) {
-          return baseDelay + 1000 // 1.4s total (every 5th)
-        }
-        return baseDelay // 0.4s for others
+        // No extra delays - base delay is enough with reduced locations
+        return baseDelay
       }
 
       while (hasNextPage) {
@@ -92,10 +87,7 @@ export async function POST(request: NextRequest) {
           const delayMs = getDelay(pageCount - 1)
           const delaySec = (delayMs / 1000).toFixed(1)
           
-          if (delayMs > 400) {
-            const extraInfo = (pageCount - 1) % 10 === 0 ? ' (10th page)' : ' (5th page)'
-            log(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] ⏸️  Waiting ${delaySec}s${extraInfo}`)
-          }
+          // No extra logging for delays since they're all the same now
           
           await delay(delayMs)
         }
@@ -118,7 +110,7 @@ export async function POST(request: NextRequest) {
                     product {
                       name
                     }
-                    locations(first: 20) {
+                    locations(first: 18) {
                       edges {
                         node {
                           quantity
