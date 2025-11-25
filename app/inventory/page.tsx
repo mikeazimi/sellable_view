@@ -151,7 +151,7 @@ export default function InventoryPage() {
     const startTimestamp = new Date().toLocaleTimeString()
     console.log('⏱️ ============================================')
     console.log(`⏱️ REFRESH STARTED at ${startTimestamp}`)
-    console.log(`⏱️ Config: 20 products/page, 199 locations/product (~3,980 credits/page)`)
+    console.log(`⏱️ Config: 100 products/page, 25 locations/product (~2,500 credits/page)`)
     console.log(`⏱️ Delays: 10s between pages, 30s backend auto-wait on throttle`)
     console.log('⏱️ ============================================')
 
