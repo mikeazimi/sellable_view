@@ -138,8 +138,10 @@ export default function SnapshotTestPage() {
 
           setStatus(`${currentStatus.toUpperCase()} (check #${checkNum})`)
 
-          // Check if completed
-          if (currentStatus === 'completed' && statusData.link) {
+          // Check if completed (can be 'completed', 'success', or 'InventorySnapshotStatus.success')
+          const isComplete = currentStatus.includes('success') || currentStatus === 'completed'
+          
+          if (isComplete && statusData.link) {
             if (pollIntervalRef.current) {
               clearInterval(pollIntervalRef.current)
               pollIntervalRef.current = null
