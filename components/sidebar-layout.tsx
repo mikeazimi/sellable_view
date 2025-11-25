@@ -10,7 +10,10 @@ import {
   Settings, 
   Menu, 
   X,
-  ChevronRight
+  ChevronRight,
+  Key,
+  Camera,
+  Database
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -19,19 +22,31 @@ const navigation = [
     name: 'Inventory',
     href: '/inventory',
     icon: Package,
-    description: 'Bin locations and stock levels'
+    description: 'View inventory data'
+  },
+  {
+    name: 'Snapshot',
+    href: '/snapshot',
+    icon: Camera,
+    description: 'Manage inventory snapshots'
+  },
+  {
+    name: 'Seed Data',
+    href: '/seed-data',
+    icon: Database,
+    description: 'Upload CSV data'
   },
   {
     name: 'Settings',
     href: '/settings',
     icon: Settings,
-    description: 'Authentication and configuration'
+    description: 'Scheduler & accounts'
   },
   {
-    name: 'Admin',
-    href: '/admin',
-    icon: Settings,
-    description: 'Upload location data'
+    name: 'Token Access',
+    href: '/token-access',
+    icon: Key,
+    description: 'API authentication'
   }
 ]
 

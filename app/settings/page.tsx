@@ -1,433 +1,322 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { AuthManager } from '@/lib/auth-manager'
-import { CustomerManager } from '@/lib/customer-manager'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Copy, Check, Key, Zap, X, Users } from 'lucide-react'
+import { Clock, Calendar, Plus, Trash2, Save } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
-interface CustomerAccount {
+interface ScheduleItem {
   id: string
-  legacy_id: number
+  days: string[]
+  time: string
+  enabled: boolean
+}
+
+interface AccountId {
+  id: string
+  value: string
   name: string
 }
 
-// Dev test token for development
-const DEV_TEST_TOKEN = 'dYbj7j9dspqoxwAtW5S2TOBNacIYvv7BKFwQqbArw7mv-'
-
 export default function SettingsPage() {
-  const [refreshToken, setRefreshToken] = useState('')
-  const [authToken, setAuthToken] = useState('')
-  const [tokenExpiry, setTokenExpiry] = useState<string>('')
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [copiedRefresh, setCopiedRefresh] = useState(false)
-  const [copiedAuth, setCopiedAuth] = useState(false)
-  const [copiedTest, setCopiedTest] = useState(false)
-  const [showTestToken, setShowTestToken] = useState(true)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [timeRemaining, setTimeRemaining] = useState<string | null>(null)
+  const [schedules, setSchedules] = useState<ScheduleItem[]>([])
+  const [accountIds, setAccountIds] = useState<AccountId[]>([])
+  const [newAccountId, setNewAccountId] = useState('')
+  const [newAccountName, setNewAccountName] = useState('')
   
-  // Customer account selection for 3PL
-  const [customers, setCustomers] = useState<CustomerAccount[]>([])
-  const [selectedCustomer, setSelectedCustomer] = useState<CustomerAccount | null>(null)
-  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false)
-
   const { toast } = useToast()
 
+  const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
   useEffect(() => {
-    // Load saved refresh token from localStorage
-    const saved = localStorage.getItem('shiphero_refresh_token')
-    if (saved) {
-      setRefreshToken(saved)
-    }
-
-    // Check if already authenticated
-    const authenticated = AuthManager.isAuthenticated()
-    setIsAuthenticated(authenticated)
+    // Load saved schedules and account IDs
+    const savedSchedules = localStorage.getItem('refresh_schedules')
+    const savedAccounts = localStorage.getItem('account_ids')
     
-    if (authenticated) {
-      const savedToken = AuthManager.getValidToken()
-      if (savedToken) {
-        setAuthToken(savedToken)
-        setTimeRemaining(AuthManager.getTimeRemaining())
-      }
-      
-      // Load customer accounts if authenticated
-      loadCustomerAccounts()
+    if (savedSchedules) {
+      setSchedules(JSON.parse(savedSchedules))
     }
-
-    // Load selected customer
-    const savedCustomer = CustomerManager.getSelectedCustomer()
-    if (savedCustomer) {
-      setSelectedCustomer(savedCustomer)
+    
+    if (savedAccounts) {
+      setAccountIds(JSON.parse(savedAccounts))
+    } else {
+      // Set default account
+      setAccountIds([{
+        id: '1',
+        value: '88774',
+        name: 'Donni HQ'
+      }])
     }
   }, [])
 
-  const loadCustomerAccounts = async () => {
-    const accessToken = AuthManager.getValidToken()
-    if (!accessToken) return
+  const handleSaveSchedules = () => {
+    localStorage.setItem('refresh_schedules', JSON.stringify(schedules))
+    toast({
+      title: 'Schedules saved',
+      description: 'Your refresh schedules have been saved',
+    })
+  }
 
-    setIsLoadingCustomers(true)
-    try {
-      const response = await fetch('/api/shiphero/customers', {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        if (result.success) {
-          setCustomers(result.data)
-          console.log('Customer accounts loaded:', result.data)
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load customer accounts:', error)
-    } finally {
-      setIsLoadingCustomers(false)
+  const handleAddSchedule = () => {
+    const newSchedule: ScheduleItem = {
+      id: Date.now().toString(),
+      days: [],
+      time: '09:00',
+      enabled: true
     }
+    setSchedules([...schedules, newSchedule])
   }
 
-  const handleSelectCustomer = (customer: CustomerAccount) => {
-    setSelectedCustomer(customer)
-    CustomerManager.saveCustomer(customer)
-    toast({
-      title: 'Customer account selected',
-      description: `All inventory queries will now filter by: ${customer.name}`,
-    })
+  const handleRemoveSchedule = (id: string) => {
+    setSchedules(schedules.filter(s => s.id !== id))
   }
 
-  const handleClearCustomer = () => {
-    setSelectedCustomer(null)
-    CustomerManager.clearCustomer()
-    toast({
-      title: 'Customer filter cleared',
-      description: 'Will show all customer data',
-    })
+  const handleToggleDay = (scheduleId: string, day: string) => {
+    setSchedules(schedules.map(s => {
+      if (s.id === scheduleId) {
+        const days = s.days.includes(day)
+          ? s.days.filter(d => d !== day)
+          : [...s.days, day]
+        return { ...s, days }
+      }
+      return s
+    }))
   }
 
-  const handleSaveRefreshToken = () => {
-    localStorage.setItem('shiphero_refresh_token', refreshToken)
-    toast({
-      title: 'Refresh token saved',
-      description: 'Your refresh token has been stored locally',
-    })
+  const handleUpdateTime = (scheduleId: string, time: string) => {
+    setSchedules(schedules.map(s => 
+      s.id === scheduleId ? { ...s, time } : s
+    ))
   }
 
-  const handleUseTestToken = () => {
-    setRefreshToken(DEV_TEST_TOKEN)
-    toast({
-      title: 'Test token loaded',
-      description: 'Dev test token has been loaded into the refresh token field',
-    })
-  }
-
-  const handleGenerateAuthToken = async () => {
-    if (!refreshToken) {
+  const handleAddAccountId = () => {
+    if (!newAccountId || !newAccountName) {
       toast({
         title: 'Error',
-        description: 'Please enter a refresh token first',
+        description: 'Please enter both Account ID and Name',
         variant: 'destructive',
       })
       return
     }
 
-    setIsGenerating(true)
-    try {
-      const response = await fetch('/api/auth/generate-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to generate token')
-      }
-
-      // Save to AuthManager for 28 days
-      AuthManager.saveAuth(data.accessToken, data.expiresIn, refreshToken)
-      
-      setAuthToken(data.accessToken)
-      setIsAuthenticated(true)
-      
-      const expiryDate = new Date(Date.now() + data.expiresIn * 1000)
-      setTokenExpiry(expiryDate.toLocaleString())
-      setTimeRemaining(AuthManager.getTimeRemaining())
-      
-      // Save refresh token for convenience  
-      localStorage.setItem('shiphero_refresh_token', refreshToken)
-      
-      // Load customer accounts after authentication
-      loadCustomerAccounts()
-      
-      toast({
-        title: 'Authentication successful',
-        description: 'Access token saved for 28 days. You can now use the inventory page.',
-      })
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to generate auth token. Please check your refresh token.',
-        variant: 'destructive',
-      })
-    } finally {
-      setIsGenerating(false)
+    const newAccount: AccountId = {
+      id: Date.now().toString(),
+      value: newAccountId,
+      name: newAccountName
     }
-  }
-
-  const handleClearToken = () => {
-    setRefreshToken('')
-    setAuthToken('')
-    setTokenExpiry('')
-    setTimeRemaining(null)
-    setIsAuthenticated(false)
-    localStorage.removeItem('shiphero_refresh_token')
-    AuthManager.clearAuth()
+    
+    const updated = [...accountIds, newAccount]
+    setAccountIds(updated)
+    localStorage.setItem('account_ids', JSON.stringify(updated))
+    
+    setNewAccountId('')
+    setNewAccountName('')
     
     toast({
-      title: 'Authentication cleared',
-      description: 'All tokens have been cleared. You will need to re-authenticate.',
+      title: 'Account added',
+      description: `${newAccountName} (${newAccountId}) has been added`,
     })
   }
 
-  const copyToClipboard = async (text: string, type: 'refresh' | 'auth' | 'test') => {
-    await navigator.clipboard.writeText(text)
-    if (type === 'refresh') {
-      setCopiedRefresh(true)
-      setTimeout(() => setCopiedRefresh(false), 2000)
-    } else if (type === 'auth') {
-      setCopiedAuth(true)
-      setTimeout(() => setCopiedAuth(false), 2000)
-    } else {
-      setCopiedTest(true)
-      setTimeout(() => setCopiedTest(false), 2000)
-    }
+  const handleRemoveAccountId = (id: string) => {
+    const updated = accountIds.filter(a => a.id !== id)
+    setAccountIds(updated)
+    localStorage.setItem('account_ids', JSON.stringify(updated))
+    
     toast({
-      title: 'Copied to clipboard',
-      description: `${type === 'test' ? 'Test token' : type === 'refresh' ? 'Refresh token' : 'Access token'} copied`,
+      title: 'Account removed',
+      description: 'Account ID has been removed',
     })
   }
 
   return (
-    <div className="p-6">
+    <div className="p-6 max-w-4xl">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
           Settings
         </h1>
         <p className="text-gray-600 dark:text-gray-400">
-          Configure your ShipHero API authentication
+          Configure automatic refresh schedules and manage account IDs
         </p>
       </div>
 
-      <Card className="max-w-2xl">
+      {/* Account ID Management */}
+      <Card className="mb-6">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-              <Key className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+              <Save className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             </div>
             <div>
-              <CardTitle className="text-xl">ShipHero Developer Authentication</CardTitle>
+              <CardTitle className="text-xl">Customer Account IDs</CardTitle>
               <CardDescription>
-                Use your ShipHero developer refresh token to access the API
+                Manage customer account IDs that will appear as filters on the inventory page
               </CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Quick Test Token */}
-          {showTestToken && (
-            <div className="relative bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-              <button
-                onClick={() => setShowTestToken(false)}
-                className="absolute top-3 right-3 text-blue-600 dark:text-blue-400"
-              >
-                <X className="w-4 h-4" />
-              </button>
-              <div className="flex items-center gap-2 mb-3">
-                <Zap className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                <span className="font-medium text-blue-900 dark:text-blue-100">
-                  Quick Test Token
-                </span>
-              </div>
-              <div className="space-y-3">
-                <Input
-                  value={DEV_TEST_TOKEN}
-                  readOnly
-                  className="font-mono text-sm"
-                />
-                <Button
-                  onClick={handleUseTestToken}
-                  className="w-full"
-                >
-                  <Zap className="w-4 h-4 mr-2" />
-                  Use Test Token
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Refresh Token Input */}
+        <CardContent className="space-y-4">
+          {/* Current Account IDs */}
           <div className="space-y-2">
-            <Label htmlFor="refresh-token">Refresh Token</Label>
-            <div className="flex gap-2">
-              <Input
-                id="refresh-token"
-                type="text"
-                placeholder="Enter your ShipHero developer refresh token"
-                value={refreshToken}
-                onChange={(e) => setRefreshToken(e.target.value)}
-                className="font-mono"
-              />
-              {refreshToken && (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => copyToClipboard(refreshToken, 'refresh')}
+            <Label>Current Accounts</Label>
+            <div className="space-y-2">
+              {accountIds.map((account) => (
+                <div
+                  key={account.id}
+                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
                 >
-                  {copiedRefresh ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                </Button>
-              )}
-            </div>
-            <p className="text-sm text-gray-500">
-              Get this from your ShipHero Third-Party Developer settings
-            </p>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-2">
-            <Button 
-              onClick={handleGenerateAuthToken} 
-              disabled={!refreshToken || isGenerating}
-              className="flex-1"
-            >
-              {isGenerating ? 'Generating...' : 'Generate Access Token'}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleClearToken}
-              disabled={!refreshToken && !authToken}
-            >
-              Clear
-            </Button>
-          </div>
-
-          {/* Authentication Status */}
-          {isAuthenticated && (
-            <div className="space-y-3 pt-4 border-t bg-green-50 dark:bg-green-950/20 rounded-lg p-4">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="font-medium text-green-800 dark:text-green-200">
-                  Authenticated
-                </span>
-              </div>
-              {timeRemaining && (
-                <p className="text-sm text-green-700 dark:text-green-300">
-                  Token expires in: {timeRemaining}
-                </p>
-              )}
-              {authToken && (
-                <div className="space-y-2">
-                  <Label htmlFor="auth-token" className="text-sm">Access Token</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="auth-token"
-                      type="text"
-                      value={authToken.substring(0, 30) + '...'}
-                      readOnly
-                      className="font-mono text-xs"
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => copyToClipboard(authToken, 'auth')}
-                    >
-                      {copiedAuth ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                    </Button>
+                  <div>
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {account.name}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Account ID: {account.value}
+                    </p>
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRemoveAccountId(account.id)}
+                  >
+                    <Trash2 className="w-4 h-4 text-red-500" />
+                  </Button>
                 </div>
-              )}
-              <p className="text-xs text-green-600 dark:text-green-400">
-                Ready to access inventory data
-              </p>
+              ))}
             </div>
-          )}
+          </div>
+
+          {/* Add New Account */}
+          <div className="border-t pt-4 space-y-3">
+            <Label>Add New Account</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Input
+                  placeholder="Account ID (e.g., 88774)"
+                  value={newAccountId}
+                  onChange={(e) => setNewAccountId(e.target.value)}
+                />
+              </div>
+              <div>
+                <Input
+                  placeholder="Account Name (e.g., Donni HQ)"
+                  value={newAccountName}
+                  onChange={(e) => setNewAccountName(e.target.value)}
+                />
+              </div>
+            </div>
+            <Button
+              onClick={handleAddAccountId}
+              className="w-full"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Account
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Customer Account Selection (3PL) */}
-      {isAuthenticated && (
-        <Card className="mt-6 max-w-2xl">
-          <CardHeader>
+      {/* Refresh Scheduler */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                <Users className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <CardTitle className="text-xl">Customer Account Filter</CardTitle>
+                <CardTitle className="text-xl">Automatic Refresh Scheduler</CardTitle>
                 <CardDescription>
-                  Select a customer account to filter all inventory queries (3PL mode)
+                  Schedule automatic ShipHero inventory refreshes. When complete, Supabase will be updated.
                 </CardDescription>
               </div>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {isLoadingCustomers ? (
-              <p className="text-sm text-gray-500">Loading customer accounts...</p>
-            ) : customers.length > 0 ? (
-              <div className="space-y-3">
-                <Label>Select Customer Account</Label>
-                <div className="grid gap-2">
-                  {customers.map((customer) => (
-                    <Button
-                      key={customer.id}
-                      variant={selectedCustomer?.id === customer.id ? 'default' : 'outline'}
-                      className="w-full justify-start"
-                      onClick={() => handleSelectCustomer(customer)}
-                    >
-                      <div className="flex items-center justify-between w-full">
-                        <span>{customer.name}</span>
-                        <span className="text-xs opacity-70">ID: {customer.legacy_id}</span>
-                      </div>
-                    </Button>
-                  ))}
-                </div>
-                {selectedCustomer && (
-                  <div className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-950/20 rounded-lg">
-                    <div>
-                      <p className="font-medium text-purple-900 dark:text-purple-100">
-                        Active Filter: {selectedCustomer.name}
-                      </p>
-                      <p className="text-xs text-purple-700 dark:text-purple-300">
-                        Account ID: {selectedCustomer.legacy_id}
-                      </p>
+            <Button onClick={handleAddSchedule} size="sm">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Schedule
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {schedules.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>No schedules configured. Click "Add Schedule" to create one.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {schedules.map((schedule) => (
+                <div
+                  key={schedule.id}
+                  className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg space-y-3"
+                >
+                  {/* Days of Week */}
+                  <div>
+                    <Label className="text-sm mb-2 block">Days</Label>
+                    <div className="flex gap-2">
+                      {daysOfWeek.map((day) => (
+                        <Button
+                          key={day}
+                          variant={schedule.days.includes(day) ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => handleToggleDay(schedule.id, day)}
+                          className="w-12"
+                        >
+                          {day}
+                        </Button>
+                      ))}
                     </div>
-                    <Button variant="outline" size="sm" onClick={handleClearCustomer}>
-                      Clear Filter
+                  </div>
+
+                  {/* Time */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <Label className="text-sm mb-2 block">Time</Label>
+                      <Input
+                        type="time"
+                        value={schedule.time}
+                        onChange={(e) => handleUpdateTime(schedule.id, e.target.value)}
+                      />
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemoveSchedule(schedule.id)}
+                      className="mt-6"
+                    >
+                      <Trash2 className="w-4 h-4 text-red-500" />
                     </Button>
                   </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500">No customer accounts found</p>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
-      {/* Information */}
-      <Card className="mt-6 max-w-2xl border-gray-200 dark:border-gray-700">
-        <CardContent className="p-4">
-          <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-            <p><strong>Refresh Token:</strong> Long-lived token from ShipHero developer settings (28-day access tokens)</p>
-            <p><strong>Customer Filter:</strong> Select a customer account to view only their inventory data</p>
-            <p><strong>API Endpoint:</strong> https://public-api.shiphero.com/graphql</p>
+                  {/* Schedule Summary */}
+                  {schedule.days.length > 0 && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Runs every {schedule.days.join(', ')} at {schedule.time}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {schedules.length > 0 && (
+            <Button
+              onClick={handleSaveSchedules}
+              className="w-full"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              Save All Schedules
+            </Button>
+          )}
+
+          {/* Info */}
+          <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+            <p className="text-sm text-blue-800 dark:text-blue-200">
+              <strong>Note:</strong> Scheduled refreshes will query ShipHero and update Supabase automatically.
+              The inventory page will always show the latest cached data.
+            </p>
           </div>
         </CardContent>
       </Card>
