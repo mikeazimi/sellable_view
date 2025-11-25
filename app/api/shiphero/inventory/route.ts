@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
                 product {
                   name
                 }
-                locations(first: 25) {
+                locations(first: 20) {
                   edges {
                     node {
                       quantity
@@ -97,13 +97,17 @@ export async function GET(request: NextRequest) {
       result = await response.json()
 
       // Check for credit throttling error (code 30)
-      if (result.errors && result.errors[0]?.extensions?.code === 30) {
-        const errorMsg = result.errors[0].message
-        const waitTime = parseWaitTime(errorMsg)
-        const totalWait = waitTime + 0.5 // Add 500ms buffer
+      // Error structure: { code: 30, message: "...", ... } at root level
+      if (result.errors && result.errors[0]?.code === 30) {
+        const error = result.errors[0]
+        const errorMsg = error.message
+        
+        // Always wait 15 seconds on credit throttle (more aggressive recovery)
+        const totalWait = 15
         
         console.log(`⚠️  Credit throttle hit (attempt ${retryCount + 1}/${maxRetries + 1})`)
-        console.log(`⏸️  Waiting ${totalWait}s as requested by API...`)
+        console.log(`⚠️  Required: ${error.required_credits} credits | Available: ${error.remaining_credits}`)
+        console.log(`⏸️  Waiting ${totalWait}s for credit recovery...`)
         
         if (retryCount < maxRetries) {
           await new Promise(resolve => setTimeout(resolve, totalWait * 1000))
