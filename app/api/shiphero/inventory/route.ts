@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
         warehouse_products(customer_account_id: $customer_account_id, active: true) {
           request_id
           complexity
-          data(first: 20, after: $cursor) {
+          data(first: 100, after: $cursor) {
             pageInfo {
               hasNextPage
               endCursor
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
                 product {
                   name
                 }
-                locations(first: 18) {
+                locations(first: 25) {
                   edges {
                     node {
                       quantity

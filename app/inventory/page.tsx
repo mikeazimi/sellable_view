@@ -151,7 +151,7 @@ export default function InventoryPage() {
     const startTimestamp = new Date().toLocaleTimeString()
     console.log('⏱️ ============================================')
     console.log(`⏱️ REFRESH STARTED at ${startTimestamp}`)
-    console.log(`⏱️ Config: 20 products/page, 18 locations/product (~360 credits/page)`)
+    console.log(`⏱️ Config: 100 products/page, 25 locations/product (~2500 credits/page)`)
     console.log('⏱️ ============================================')
 
     setIsLoading(true)
@@ -175,7 +175,7 @@ export default function InventoryPage() {
 
         // Small delay between requests (except first page)
         if (pageCount > 1) {
-          await new Promise(resolve => setTimeout(resolve, 200))
+          await new Promise(resolve => setTimeout(resolve, 300))
         }
 
         console.log(`⏱️ [${((Date.now() - startTime) / 1000).toFixed(2)}s] 📤 Fetching page ${pageCount}...`)
