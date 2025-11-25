@@ -25,8 +25,6 @@ interface Snapshot {
 
 export default function SnapshotPage() {
   const [accountId, setAccountId] = useState('88774')
-  const [sellableFilter, setSellableFilter] = useState('all')
-  const [pickableFilter, setPickableFilter] = useState('all')
   const [snapshots] = useState<Snapshot[]>([])
   
   const { toast } = useToast()
@@ -126,33 +124,11 @@ export default function SnapshotPage() {
               />
             </div>
 
-            {/* Filters */}
-            <div className="space-y-2">
-              <Label htmlFor="sellable-filter">Sellable Filter</Label>
-              <select
-                id="sellable-filter"
-                value={sellableFilter}
-                onChange={(e) => setSellableFilter(e.target.value)}
-                className="w-full h-10 px-3 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-              >
-                <option value="all">All</option>
-                <option value="sellable">Sellable Only</option>
-                <option value="non_sellable">Non-Sellable Only</option>
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="pickable-filter">Pickable Filter</Label>
-              <select
-                id="pickable-filter"
-                value={pickableFilter}
-                onChange={(e) => setPickableFilter(e.target.value)}
-                className="w-full h-10 px-3 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-              >
-                <option value="all">All</option>
-                <option value="pickable">Pickable Only</option>
-                <option value="non_pickable">Non-Pickable Only</option>
-              </select>
+            {/* Info */}
+            <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                <strong>Note:</strong> Snapshots include all inventory data. You cannot filter by pickable/sellable when creating a snapshot.
+              </p>
             </div>
 
             {/* Run Button */}
