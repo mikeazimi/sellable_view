@@ -17,8 +17,11 @@ export default function AdminPage() {
   const [isSyncingInventory, setIsSyncingInventory] = useState(false)
   const [inventorySyncResult, setInventorySyncResult] = useState<any>(null)
   const [snapshotCustomerId, setSnapshotCustomerId] = useState('88774')
+  const [snapshotWarehouseId, setSnapshotWarehouseId] = useState('74776')
   const [snapshotStatus, setSnapshotStatus] = useState('')
   const [pollAttempt, setPollAttempt] = useState(0)
+  const [currentSnapshotId, setCurrentSnapshotId] = useState('')
+  const [recentSnapshots, setRecentSnapshots] = useState<any[]>([])
   const { toast} = useToast()
 
   const runInventorySync = async () => {
@@ -39,10 +42,17 @@ export default function AdminPage() {
     try {
       console.log('Starting snapshot for:', snapshotCustomerId)
       
-      // Convert to UUID
+      // Convert customer ID to UUID
       let accountId = snapshotCustomerId.trim()
       if (/^\d+$/.test(accountId)) {
         accountId = btoa(`CustomerAccount:${accountId}`)
+      }
+
+      // Convert warehouse ID to base64
+      let warehouseId = snapshotWarehouseId.trim()
+      if (/^\d+$/.test(warehouseId)) {
+        warehouseId = btoa(`Warehouse:${warehouseId}`)
+        console.log('Converted warehouse ID to:', warehouseId)
       }
       
       // Step 1: Start snapshot generation
@@ -52,7 +62,10 @@ export default function AdminPage() {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ customer_account_id: accountId })
+        body: JSON.stringify({ 
+          customer_account_id: accountId,
+          warehouse_id: warehouseId
+        })
       })
 
       const startResult = await startResponse.json()
@@ -62,6 +75,7 @@ export default function AdminPage() {
       }
 
       const snapshotId = startResult.snapshot_id
+      setCurrentSnapshotId(snapshotId)
       console.log('Snapshot ID:', snapshotId, '- Polling for completion...')
 
       toast({
@@ -396,6 +410,20 @@ export default function AdminPage() {
               />
               <p className="text-xs text-gray-500 mt-1">
                 Enter the account ID to sync (e.g., 88774 for Donni HQ)
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Warehouse ID</label>
+              <Input
+                type="text"
+                value={snapshotWarehouseId}
+                onChange={(e) => setSnapshotWarehouseId(e.target.value)}
+                placeholder="74776"
+                className="w-full"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Only snapshot this warehouse (MUCH faster!)
               </p>
             </div>
 
