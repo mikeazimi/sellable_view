@@ -160,10 +160,10 @@ export default function InventoryPage() {
         description: 'This may take a few minutes. Check console for progress...',
       })
 
-      console.log('📊 Starting ShipHero refresh...')
+      console.log('📊 Starting ShipHero refresh with real-time updates...')
 
-      // Start the refresh job
-      const response = await fetch('/api/refresh-inventory', {
+      // Start the refresh job (returns immediately with job_id)
+      const startResponse = await fetch('/api/refresh-inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -172,11 +172,51 @@ export default function InventoryPage() {
         }),
       })
 
-      const result = await response.json()
+      const { job_id } = await startResponse.json()
+      console.log(`Job started: ${job_id}`)
       
-      // Output all logs to browser console
-      if (result.logs && Array.isArray(result.logs)) {
-        result.logs.forEach((log: string) => console.log(log))
+      // Poll for updates every 500ms
+      let lastLogCount = 0
+      let result: any = null
+      
+      const pollInterval = setInterval(async () => {
+        try {
+          const pollResponse = await fetch(`/api/refresh-inventory?job_id=${job_id}`)
+          const jobStatus = await pollResponse.json()
+          
+          // Output new logs to console
+          if (jobStatus.logs && jobStatus.logs.length > lastLogCount) {
+            const newLogs = jobStatus.logs.slice(lastLogCount)
+            newLogs.forEach((log: string) => console.log(log))
+            lastLogCount = jobStatus.logs.length
+          }
+          
+          // Check if job is complete
+          if (jobStatus.status === 'completed' || jobStatus.status === 'failed') {
+            clearInterval(pollInterval)
+            result = jobStatus.result || {}
+            
+            if (jobStatus.status === 'failed') {
+              throw new Error(jobStatus.error || 'Refresh failed')
+            }
+          }
+        } catch (err) {
+          console.error('Polling error:', err)
+        }
+      }, 500)
+      
+      // Wait for job to complete (with timeout)
+      const maxWait = 300000 // 5 minutes
+      const startWait = Date.now()
+      
+      while (!result && (Date.now() - startWait) < maxWait) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
+      
+      clearInterval(pollInterval)
+      
+      if (!result) {
+        throw new Error('Job timeout - took longer than 5 minutes')
       }
       
       if (result.success) {
