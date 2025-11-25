@@ -95,7 +95,7 @@ export default function SnapshotTestPage() {
 
       // Step 2: Poll for completion
       setStatus('Polling for completion...')
-      console.log('⏱️  Step 2: Polling for completion (every 2 minutes)...')
+      console.log('⏱️  Step 2: Polling for completion (every 30 seconds)...')
       console.log('')
 
       let checkNum = 0
@@ -172,8 +172,21 @@ export default function SnapshotTestPage() {
 
             const snapshotData = downloadData.data
             
-            // Calculate statistics
-            const products = snapshotData.products || []
+            console.log('   Snapshot data structure:', Object.keys(snapshotData))
+            
+            // Calculate statistics - data structure varies, try different formats
+            let products = []
+            if (Array.isArray(snapshotData)) {
+              products = snapshotData
+            } else if (snapshotData.products && Array.isArray(snapshotData.products)) {
+              products = snapshotData.products
+            } else if (snapshotData.data && Array.isArray(snapshotData.data)) {
+              products = snapshotData.data
+            } else {
+              console.log('❌ Unexpected data structure:', snapshotData)
+              throw new Error('Unexpected snapshot data structure')
+            }
+            
             const totalProducts = products.length
             let totalLocations = 0
             let maxLocations = 0
@@ -252,8 +265,8 @@ export default function SnapshotTestPage() {
       // Poll immediately
       await pollSnapshot()
 
-      // Then poll every 120 seconds (2 minutes)
-      pollIntervalRef.current = setInterval(pollSnapshot, 120000)
+      // Then poll every 30 seconds
+      pollIntervalRef.current = setInterval(pollSnapshot, 30000)
 
     } catch (error: any) {
       console.error('❌ Error:', error.message)
