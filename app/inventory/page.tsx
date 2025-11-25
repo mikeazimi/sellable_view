@@ -160,7 +160,7 @@ export default function InventoryPage() {
         description: 'This may take a few minutes. Check console for progress...',
       })
 
-      console.log('📊 Starting ShipHero refresh with streaming updates...')
+      console.log('📊 Starting ShipHero refresh with real-time streaming...')
 
       // Stream progress updates from server
       const response = await fetch('/api/refresh-inventory', {
@@ -172,7 +172,37 @@ export default function InventoryPage() {
         }),
       })
 
-      const result = await response.json()
+      if (!response.body) {
+        throw new Error('No response body')
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let result: any = null
+
+      while (true) {
+        const { done, value } = await reader.read()
+        
+        if (done) break
+        
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n\n')
+        buffer = lines.pop() || ''
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = JSON.parse(line.slice(6))
+            if (data.log) {
+              // Log each message to browser console in real-time
+              console.log(data.log)
+            } else if (data.success !== undefined) {
+              // Final result message
+              result = data
+            }
+          }
+        }
+      }
       
       if (result.success) {
         // Reload from Supabase to show updated data
