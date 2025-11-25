@@ -150,7 +150,7 @@ export default function InventoryPage() {
       return
     }
 
-    setIsLoading(true)
+      setIsLoading(true)
     setFlatInventory([]) // Clear current data
     setLoadingMessage('Refreshing from ShipHero...')
     setError(null)
@@ -159,32 +159,31 @@ export default function InventoryPage() {
       const accountIdToUse = btoa(`CustomerAccount:${DEFAULT_CUSTOMER_ID}`)
       console.log('🔄 Force refresh from ShipHero, will update Supabase cache...')
       
-      // Get filtered location names from Supabase (INSTANT!)
-      let allowedLocations: Set<string> | null = null
-      
-      if (preLoadFilters.sellable !== 'all' || preLoadFilters.pickable !== 'all') {
-        console.log('📦 Querying Supabase for filtered locations...')
-        
-        const filterParams = new URLSearchParams({
-          sellable: preLoadFilters.sellable,
-          pickable: preLoadFilters.pickable
-        })
-        
-        const locResponse = await fetch(`/api/locations/filter?${filterParams.toString()}`)
-        const locResult = await locResponse.json()
-        
-        if (locResult.success) {
-          allowedLocations = new Set(locResult.locationNames)
-          console.log(`✅ Supabase returned ${allowedLocations.size} matching locations (instant!)`)
-          
-          toast({
-            title: 'Filter applied',
-            description: `Loading inventory for ${allowedLocations.size} ${preLoadFilters.sellable} locations`,
-          })
-        }
+      // Query ShipHero with location filters from Supabase
+      console.log('📦 Querying Supabase for filtered locations...')
+      const supabaseFilterParams = new URLSearchParams({
+        sellable: preLoadFilters.sellable,
+        pickable: preLoadFilters.pickable,
+      })
+      const supabaseLocationsResponse = await fetch(`/api/locations/filter?${supabaseFilterParams.toString()}`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      })
+
+      if (!supabaseLocationsResponse.ok) {
+        const errorData = await supabaseLocationsResponse.json()
+        throw new Error(errorData.error || 'Failed to fetch filtered locations from Supabase')
       }
-      
-      // Step 2: Query ShipHero
+      const supabaseLocationsResult = await supabaseLocationsResponse.json()
+      const allowedLocations = new Set(supabaseLocationsResult.data.map((loc: any) => loc.location))
+      console.log(`✅ Supabase returned ${allowedLocations.size} matching locations (instant!)`)
+
+      if (allowedLocations.size === 0 && (preLoadFilters.sellable !== 'all' || preLoadFilters.pickable !== 'all')) {
+        setLoadingMessage('No locations found matching filters in cache.')
+        setIsLoading(false)
+        return
+      }
+
+      // Query ShipHero
       const allItems: FlatInventoryItem[] = []
       let hasNextPage = true
       let cursor: string | null = null
@@ -192,11 +191,10 @@ export default function InventoryPage() {
 
       while (hasNextPage && pageCount < 500) {
         pageCount++
+        setLoadingMessage(`Fetching page ${pageCount}... (${allItems.length} records loaded)`)
         
         const filterParams = new URLSearchParams({
           customer_account_id: accountIdToUse,
-          filter_sellable: preLoadFilters.sellable,
-          filter_pickable: preLoadFilters.pickable,
           ...(cursor && { cursor })
         })
         
@@ -311,15 +309,15 @@ export default function InventoryPage() {
         setIsAuthenticated(false)
       }
       
-      toast({
-        title: 'Error',
+        toast({
+          title: 'Error',
         description: error.message || 'Failed to load inventory',
-        variant: 'destructive',
-      })
-    } finally {
-      setIsLoading(false)
+          variant: 'destructive',
+        })
+      } finally {
+        setIsLoading(false)
+      }
     }
-  }
 
   const sortData = (field: SortField) => {
     const direction = sortField === field && sortDirection === 'asc' ? 'desc' : 'asc'
@@ -409,7 +407,7 @@ export default function InventoryPage() {
             </Button>
           )}
         </div>
-      </div>
+        </div>
 
       {/* Summary Stats */}
       {flatInventory.length > 0 && (
@@ -469,11 +467,11 @@ export default function InventoryPage() {
                   <option value="pickable">Pickable Only</option>
                   <option value="non-pickable">Non-Pickable Only</option>
                 </select>
-              </div>
+                            </div>
               <div className="text-sm text-gray-500">
                 Showing {filteredInventory.length} of {flatInventory.length} records
-              </div>
-            </div>
+                            </div>
+                          </div>
           </CardContent>
         </Card>
       )}
@@ -587,10 +585,10 @@ export default function InventoryPage() {
               <p className="text-xs text-blue-700 dark:text-blue-300">
                 {flatInventory.length} records loaded so far
               </p>
-            </div>
-          </div>
-        </div>
-      )}
+                          </div>
+                        </div>
+                    </div>
+                  )}
 
       {!isAuthenticated ? (
         <Card className="border-amber-200 bg-amber-50/20 dark:bg-amber-950/20">
@@ -624,8 +622,8 @@ export default function InventoryPage() {
             <Package className="w-12 h-12 mx-auto mb-4 text-gray-400 animate-pulse" />
             <p className="text-gray-600 text-lg">Starting to load inventory...</p>
             <p className="text-sm text-gray-500 mt-2">Data will appear shortly</p>
-          </CardContent>
-        </Card>
+                </CardContent>
+              </Card>
       ) : (
         <Card>
           <CardContent className="p-0">
@@ -693,10 +691,10 @@ export default function InventoryPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+          </div>
           </CardContent>
         </Card>
-      )}
-    </div>
+        )}
+      </div>
   )
 }
