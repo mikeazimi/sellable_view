@@ -189,6 +189,7 @@ export default function InventoryPage() {
         console.log(`⏱️ Total Duration: ${(totalTime / 1000).toFixed(2)} seconds (${(totalTime / 60000).toFixed(2)} minutes)`)
         console.log(`⏱️ Pages fetched: ${result.pages_fetched || 'N/A'}`)
         console.log(`⏱️ Records synced: ${result.items_synced || 'N/A'}`)
+        console.log(`💳 Total credits used: ${result.total_credits_used || 'N/A'}`)
         console.log('⏱️ ============================================')
         
         toast({
