@@ -53,9 +53,7 @@ export default function InventoryPage() {
   const [sortField, setSortField] = useState<SortField>('warehouse')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [selectedCustomer, setSelectedCustomer] = useState<any>(null)
-  const [customerAccountId, setCustomerAccountId] = useState('')
-  const [availableCustomers, setAvailableCustomers] = useState<any[]>([])
+  const DEFAULT_CUSTOMER_ID = '88774' // Donni HQ
   const [columnFilters, setColumnFilters] = useState<ColumnFilters>({
     productName: true,
     warehouse: true,
@@ -141,7 +139,7 @@ export default function InventoryPage() {
     setColumnFilters(prev => ({ ...prev, [column]: !prev[column] }))
   }
 
-  const loadInventory = async (skipCache = false) => {
+  const refreshFromShipHero = async () => {
     const accessToken = AuthManager.getValidToken()
     if (!accessToken) {
       toast({
@@ -152,41 +150,14 @@ export default function InventoryPage() {
       return
     }
 
-    if (!customerAccountId) {
-      toast({
-        title: 'Customer account required',
-        description: 'Please select a customer account from the dropdown',
-        variant: 'destructive',
-      })
-      return
-    }
-
     setIsLoading(true)
+    setFlatInventory([]) // Clear current data
+    setLoadingMessage('Refreshing from ShipHero...')
+    setError(null)
     
     try {
-      // Auto-convert legacy ID to UUID if just a number
-      let accountIdToUse = customerAccountId.trim()
-      
-      if (/^\d+$/.test(accountIdToUse)) {
-        accountIdToUse = btoa(`CustomerAccount:${accountIdToUse}`)
-        console.log(`Converted ${customerAccountId} to UUID: ${accountIdToUse}`)
-      }
-      
-      // Skip cache if force refresh
-      if (!skipCache) {
-        console.log('🚀 Loading from Supabase cache (NOT ShipHero!)')
-        
-        // Try Supabase first
-        const supabaseParams = new URLSearchParams({
-          customer_account_id: accountIdToUse,
-          sellable: preLoadFilters.sellable,
-          pickable: preLoadFilters.pickable
-        })
-        
-        const supabaseResponse = await fetch(`/api/inventory/supabase?${supabaseParams.toString()}`)
-        const supabaseResult = await supabaseResponse.json()
-        
-        if (supabaseResult.success) {
+      const accountIdToUse = btoa(`CustomerAccount:${DEFAULT_CUSTOMER_ID}`)
+      console.log('🔄 Force refresh from ShipHero, will update Supabase cache...')
         // SUCCESS - Got data from Supabase!
         console.log(`✅ Loaded ${supabaseResult.data.length} records from Supabase (instant!)`)
         
@@ -483,18 +454,6 @@ export default function InventoryPage() {
               <Download className="w-4 h-4 mr-2" />
               Export CSV
             </Button>
-          )}
-          {isAuthenticated && flatInventory.length > 0 && (
-            <>
-              <Button onClick={() => loadInventory(false)} disabled={isLoading} variant="outline">
-                <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                {isLoading ? 'Loading...' : 'Refresh (Cache)'}
-              </Button>
-              <Button onClick={() => loadInventory(true)} disabled={isLoading} variant="outline">
-                <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                Force Refresh (ShipHero)
-              </Button>
-            </>
           )}
         </div>
       </div>
