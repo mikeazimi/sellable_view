@@ -160,9 +160,9 @@ export default function InventoryPage() {
         description: 'This may take a few minutes. Check console for progress...',
       })
 
-      console.log('📊 Starting ShipHero refresh with real-time streaming...')
+      console.log('📊 Starting ShipHero refresh...')
 
-      // Stream progress updates from server
+      // Start the refresh job
       const response = await fetch('/api/refresh-inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -172,36 +172,11 @@ export default function InventoryPage() {
         }),
       })
 
-      if (!response.body) {
-        throw new Error('No response body')
-      }
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let result: any = null
-
-      while (true) {
-        const { done, value } = await reader.read()
-        
-        if (done) break
-        
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n\n')
-        buffer = lines.pop() || ''
-        
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = JSON.parse(line.slice(6))
-            if (data.log) {
-              // Log each message to browser console in real-time
-              console.log(data.log)
-            } else if (data.success !== undefined) {
-              // Final result message
-              result = data
-            }
-          }
-        }
+      const result = await response.json()
+      
+      // Output all logs to browser console
+      if (result.logs && Array.isArray(result.logs)) {
+        result.logs.forEach((log: string) => console.log(log))
       }
       
       if (result.success) {

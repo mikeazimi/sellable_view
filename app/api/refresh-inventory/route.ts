@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
+// In-memory storage for logs (temporary, per-instance)
+const logStore: Record<string, string[]> = {};
+
 /**
  * Triggered by manual button click
  * Runs live ShipHero query and updates Supabase cache
@@ -8,33 +11,35 @@ import { supabaseAdmin } from "@/lib/supabase";
 export async function POST(request: NextRequest) {
   const requestStartTime = Date.now()
   const startTimestamp = new Date().toLocaleString()
+  const jobId = `job_${Date.now()}`
+  logStore[jobId] = []
   
-  // Create a streaming response
-  const encoder = new TextEncoder()
-  const stream = new TransformStream()
-  const writer = stream.writable.getWriter()
-  
-  const sendLog = async (message: string) => {
+  const log = (message: string) => {
     console.log(message) // Server logs
-    await writer.write(encoder.encode(`data: ${JSON.stringify({ log: message })}\n\n`))
+    logStore[jobId].push(message) // Store for browser polling
   }
   
-  // Start processing in background
-  (async () => {
-    try {
-      const body = await request.json()
-      const { customer_account_id, access_token } = body
-      
-      if (!access_token || !customer_account_id) {
-        await sendLog('❌ Error: access_token and customer_account_id required')
-        await writer.close()
-        return
-      }
+  try {
+    const body = await request.json()
+    const { customer_account_id, access_token, poll } = body
+    
+    // If this is a polling request, return accumulated logs
+    if (poll && body.job_id) {
+      const logs = logStore[body.job_id] || []
+      return NextResponse.json({ logs, job_id: body.job_id })
+    }
+    
+    if (!access_token || !customer_account_id) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "access_token and customer_account_id required" 
+      }, { status: 400 });
+    }
 
-      await sendLog('⏱️ ================================================')
-      await sendLog(`⏱️ REFRESH REQUEST STARTED: ${startTimestamp}`)
-      await sendLog('⏱️ ================================================')
-      await sendLog(`Customer Account ID: ${customer_account_id}`)
+    log('⏱️ ================================================')
+    log(`⏱️ REFRESH REQUEST STARTED: ${startTimestamp}`)
+    log('⏱️ ================================================')
+    log(`Customer Account ID: ${customer_account_id}`)
 
     // Query ShipHero warehouse_products with pagination
     let allItems: any[] = []
@@ -46,45 +51,47 @@ export async function POST(request: NextRequest) {
     let creditsRemaining = 4004
     let totalCreditsUsed = 0
 
-      // Helper to delay between requests (rate limiting)
-      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+    // Helper to delay between requests (rate limiting)
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-      // Optimized delay strategy: Complete in <5 minutes
-      // 0.8s base + 3s every 5th + 5s every 10th = ~3.3 minutes total
-      const getDelay = (pageNum: number) => {
-        const baseDelay = 800 // 0.8 seconds between ALL pages
-        
-        if (pageNum % 10 === 0) {
-          // Every 10th page: 0.8s + 5s = 5.8s total
-          return baseDelay + 5000
-        } else if (pageNum % 5 === 0) {
-          // Every 5th page: 0.8s + 3s = 3.8s total
-          return baseDelay + 3000
-        }
-        return baseDelay // 0.8s for all other pages
-      }
-
-      while (hasNextPage) {
-        pageCount++
-        const pageStart = Date.now()
-        
-        // Apply delay before fetching (except first page)
-        if (pageCount > 1) {
-          const delayMs = getDelay(pageCount - 1) // Check previous page
-          const delaySec = (delayMs / 1000).toFixed(1)
-          
-          if (delayMs > 800) {
-            // Log extra delay info for 5th/10th pages
-            const extraInfo = (pageCount - 1) % 10 === 0 ? ' (10th page)' : ' (5th page)'
-            await sendLog(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] ⏸️  Waiting ${delaySec}s${extraInfo}`)
-          }
-          
-          await delay(delayMs)
-        }
+    // Optimized delay strategy: Complete in <5 minutes
+    // 0.8s base + 3s every 5th + 5s every 10th = ~3.3 minutes total
+    const getDelay = (pageNum: number) => {
+      const baseDelay = 800 // 0.8 seconds between ALL pages
       
+      if (pageNum % 10 === 0) {
+        // Every 10th page: 0.8s + 5s = 5.8s total
+        return baseDelay + 5000
+      } else if (pageNum % 5 === 0) {
+        // Every 5th page: 0.8s + 3s = 3.8s total
+        return baseDelay + 3000
+      }
+      return baseDelay // 0.8s for all other pages
+    }
+
+    while (hasNextPage) {
+      pageCount++
+      const pageStart = Date.now()
+      
+      // Apply delay before fetching (except first page)
+      if (pageCount > 1) {
+        const delayMs = getDelay(pageCount - 1) // Check previous page
+        const delaySec = (delayMs / 1000).toFixed(1)
+        
+        if (delayMs > 800) {
+          // Log extra delay info for 5th/10th pages
+          const extraInfo = (pageCount - 1) % 10 === 0 ? ' (10th page)' : ' (5th page)'
+          log(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] ⏸️  Waiting ${delaySec}s${extraInfo}`)
+        }
+        
+        await delay(delayMs)
+      }
+    
       const query = `
         query ($customer_account_id: String, $cursor: String) {
           warehouse_products(customer_account_id: $customer_account_id, active: true) {
+            request_id
+            complexity
             data(first: 45, after: $cursor) {
               pageInfo {
                 hasNextPage
@@ -123,7 +130,7 @@ export async function POST(request: NextRequest) {
         cursor
       }
 
-        await sendLog(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] 📤 Fetching page ${pageCount}...`)
+      log(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] 📤 Fetching page ${pageCount}...`)
 
       const response = await fetch('https://public-api.shiphero.com/graphql', {
         method: 'POST',
@@ -141,16 +148,16 @@ export async function POST(request: NextRequest) {
       const result = await response.json()
 
       if (result.errors) {
-          const errorMsg = result.errors[0].message
-          // If rate limited, wait and retry
-          if (errorMsg.includes('not enough credits')) {
-            await sendLog(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] ⚠️  Rate limited - waiting 3s and retrying...`)
-            await delay(3000)
-            // Retry this same page
-            pageCount--
-            continue
-          }
-          throw new Error(errorMsg)
+        const errorMsg = result.errors[0].message
+        // If rate limited, wait and retry
+        if (errorMsg.includes('not enough credits')) {
+          log(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] ⚠️  Rate limited - waiting 3s and retrying...`)
+          await delay(3000)
+          // Retry this same page
+          pageCount--
+          continue
+        }
+        throw new Error(errorMsg)
       }
 
       const warehouseProducts = result.data?.warehouse_products
@@ -191,37 +198,37 @@ export async function POST(request: NextRequest) {
         }
       }
 
-        const pageElapsed = ((Date.now() - pageStart) / 1000).toFixed(2)
-        
-        // Update credit tracking
-        totalCreditsUsed += complexity
-        creditsRemaining = Math.max(0, 4004 - totalCreditsUsed)
-        
-        await sendLog(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] ✅ Page ${pageCount} complete (${pageElapsed}s)`)
-        await sendLog(`   📊 Items: ${allItems.length} total | Used: ${complexity} credits | Remaining: ${creditsRemaining} credits`)
-        await sendLog(`   💳 Total used: ${totalCreditsUsed} credits | Request ID: ${requestId}`)
+      const pageElapsed = ((Date.now() - pageStart) / 1000).toFixed(2)
+      
+      // Update credit tracking
+      totalCreditsUsed += complexity
+      creditsRemaining = Math.max(0, 4004 - totalCreditsUsed)
+      
+      log(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] ✅ Page ${pageCount} complete (${pageElapsed}s)`)
+      log(`   📊 Items: ${allItems.length} total | Used: ${complexity} credits | Remaining: ${creditsRemaining} credits`)
+      log(`   💳 Total used: ${totalCreditsUsed} credits | Request ID: ${requestId}`)
 
-        hasNextPage = data.pageInfo.hasNextPage
-        cursor = data.pageInfo.endCursor
-      }
+      hasNextPage = data.pageInfo.hasNextPage
+      cursor = data.pageInfo.endCursor
+    }
 
-      await sendLog(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] 📊 Total items fetched: ${allItems.length}`)
+    log(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] 📊 Total items fetched: ${allItems.length}`)
 
-      // Delete old inventory for this customer
-      await sendLog(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] 🗑️ Deleting old inventory...`)
+    // Delete old inventory for this customer
+    log(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] 🗑️ Deleting old inventory...`)
     const { error: deleteError } = await supabaseAdmin
       .from('inventory_locations')
       .delete()
       .eq('account_id', customer_account_id)
 
-      if (deleteError) {
-        console.error('Delete error:', deleteError)
-      } else {
-        await sendLog(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] ✅ Old inventory deleted`)
-      }
+    if (deleteError) {
+      console.error('Delete error:', deleteError)
+    } else {
+      log(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] ✅ Old inventory deleted`)
+    }
 
-      // Insert new inventory
-      await sendLog(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] 💾 Inserting ${allItems.length} items...`)
+    // Insert new inventory
+    log(`⏱️ [${((Date.now() - requestStartTime) / 1000).toFixed(2)}s] 💾 Inserting ${allItems.length} items...`)
     const records = allItems.map(item => ({
       sku: item.sku,
       location_name: item.location,
@@ -239,46 +246,43 @@ export async function POST(request: NextRequest) {
       .from('inventory_locations')
       .insert(records)
 
-      if (error) {
-        throw new Error(error.message)
-      }
-
-      const totalElapsed = ((Date.now() - requestStartTime) / 1000).toFixed(2)
-      const endTimestamp = new Date().toLocaleString()
-
-      await sendLog('⏱️ ================================================')
-      await sendLog(`⏱️ REFRESH COMPLETE: ${endTimestamp}`)
-      await sendLog(`⏱️ Total Duration: ${totalElapsed}s`)
-      await sendLog(`⏱️ Pages: ${pageCount}`)
-      await sendLog(`⏱️ Records: ${allItems.length}`)
-      await sendLog(`💳 Total credits used: ${totalCreditsUsed}`)
-      await sendLog('⏱️ ================================================')
-
-      // Send final success message
-      await writer.write(encoder.encode(`data: ${JSON.stringify({ 
-        success: true,
-        items_synced: allItems.length,
-        pages_fetched: pageCount,
-        duration_seconds: parseFloat(totalElapsed),
-        total_credits_used: totalCreditsUsed
-      })}\n\n`))
-      
-      await writer.close()
-
-    } catch (error: any) {
-      const totalElapsed = ((Date.now() - requestStartTime) / 1000).toFixed(2)
-      console.error(`⏱️ [${totalElapsed}s] 💥 Refresh error:`, error)
-      await sendLog(`❌ Error: ${error.message}`)
-      await writer.close()
+    if (error) {
+      throw new Error(error.message)
     }
-  })()
-  
-  return new Response(stream.readable, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    },
-  })
-}
 
+    const totalElapsed = ((Date.now() - requestStartTime) / 1000).toFixed(2)
+    const endTimestamp = new Date().toLocaleString()
+
+    log('⏱️ ================================================')
+    log(`⏱️ REFRESH COMPLETE: ${endTimestamp}`)
+    log(`⏱️ Total Duration: ${totalElapsed}s`)
+    log(`⏱️ Pages: ${pageCount}`)
+    log(`⏱️ Records: ${allItems.length}`)
+    log(`💳 Total credits used: ${totalCreditsUsed}`)
+    log('⏱️ ================================================')
+
+    // Clean up log store after 10 minutes
+    setTimeout(() => delete logStore[jobId], 600000)
+
+    return NextResponse.json({
+      success: true,
+      items_synced: allItems.length,
+      pages_fetched: pageCount,
+      duration_seconds: parseFloat(totalElapsed),
+      total_credits_used: totalCreditsUsed,
+      job_id: jobId,
+      logs: logStore[jobId]
+    });
+
+  } catch (error: any) {
+    const totalElapsed = ((Date.now() - requestStartTime) / 1000).toFixed(2)
+    console.error(`⏱️ [${totalElapsed}s] 💥 Refresh error:`, error)
+    log(`❌ Error: ${error.message}`)
+    return NextResponse.json({ 
+      success: false, 
+      error: error.message,
+      job_id: jobId,
+      logs: logStore[jobId]
+    }, { status: 500 });
+  }
+}
