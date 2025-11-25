@@ -434,14 +434,83 @@ export default function AdminPage() {
     <div className="p-6">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          Admin - Seed Location Data
+          Admin - Data Management
         </h1>
         <p className="text-gray-600 dark:text-gray-400">
-          Upload CSV to populate location cache
+          Upload CSVs and manage inventory sync
         </p>
       </div>
 
-      <Card className="max-w-2xl">
+      <div className="space-y-6 max-w-2xl">
+        {/* Inventory Snapshot CSV Upload */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                <Database className="w-5 h-5 text-green-600 dark:text-green-400" />
+              </div>
+              <div>
+                <CardTitle className="text-xl">Upload Inventory Snapshot</CardTitle>
+                <CardDescription>
+                  Upload ShipHero inventory snapshot CSV (4,606 records → instant Supabase!)
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleInventoryCsvUpload}
+                className="block w-full text-sm"
+              />
+              {inventoryCsvData.length > 0 && (
+                <p className="text-sm text-green-600 mt-2">
+                  ✅ {inventoryCsvData.length.toLocaleString()} records loaded from CSV
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Customer Account ID</label>
+              <Input
+                type="text"
+                value={snapshotCustomerId}
+                onChange={(e) => setSnapshotCustomerId(e.target.value)}
+                placeholder="88774"
+              />
+            </div>
+
+            {inventoryCsvData.length > 0 && (
+              <Button 
+                onClick={uploadInventorySnapshot} 
+                disabled={isUploadingInventory}
+                className="w-full"
+              >
+                {isUploadingInventory ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>Upload {inventoryCsvData.length.toLocaleString()} Records to Supabase</>
+                )}
+              </Button>
+            )}
+
+            {inventoryUploadProgress && (
+              <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                  {inventoryUploadProgress}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Locations CSV Upload */}
+        <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
