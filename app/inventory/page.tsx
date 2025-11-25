@@ -311,20 +311,44 @@ export default function InventoryPage() {
 
         setFlatInventory([...allItems])
 
+        // Cache this batch to Supabase for instant filtering later
+        if (allItems.length > 0 && pageCount % 3 === 0) {
+          // Cache every 3 pages
+          fetch('/api/inventory/cache-results', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              items: allItems,
+              customer_account_id: accountIdToUse
+            })
+          }).catch(err => console.warn('Cache failed:', err))
+        }
+
         hasNextPage = warehouseData?.pageInfo?.hasNextPage || false
         cursor = warehouseData?.pageInfo?.endCursor || null
 
         if (hasNextPage) {
-          // Optimal pause strategy for credit conservation
           if (pageCount % 5 === 0) {
-            // Every 5th page: 3 second pause
             console.log(`⏸️  Extended pause after page ${pageCount} (3s)...`)
             await new Promise(resolve => setTimeout(resolve, 3000))
           } else {
-            // Regular: 1 second pause
             await new Promise(resolve => setTimeout(resolve, 1000))
           }
         }
+      }
+
+      // Final cache save after all pages loaded
+      if (allItems.length > 0) {
+        console.log('💾 Final cache save to Supabase...')
+        await fetch('/api/inventory/cache-results', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            items: allItems,
+            customer_account_id: accountIdToUse
+          })
+        })
+        console.log('✅ Results cached for future instant queries')
       }
 
       console.log(`🎉 Complete! ${allItems.length} records from ${pageCount} pages`)

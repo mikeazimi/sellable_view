@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
         ) {
           request_id
           complexity
-          data(first: 50, after: $cursor) {
+          data(first: 45, after: $cursor) {
             pageInfo {
               hasNextPage
               endCursor
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
                 product {
                   name
                 }
-                locations(first: 30) {
+                locations(first: 20) {
                   edges {
                     node {
                       quantity

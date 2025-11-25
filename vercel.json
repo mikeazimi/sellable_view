@@ -1,9 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/sync/inventory-snapshot",
-      "schedule": "0 2 * * *"
-    }
-  ]
-}
-
