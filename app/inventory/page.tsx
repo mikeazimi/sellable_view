@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Package, Download, RefreshCw, RotateCw, ArrowUpDown, ArrowUp, ArrowDown, CheckCircle2 } from 'lucide-react'
+import { Package, Download, RefreshCw, RotateCw, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { AuthManager } from '@/lib/auth-manager'
 
@@ -594,18 +594,14 @@ export default function InventoryPage() {
                       <td className="px-4 py-3.5 text-sm text-gray-600 dark:text-gray-400">{item.type}</td>
                       <td className="px-4 py-3.5 font-semibold text-sm text-gray-900 dark:text-white">{item.quantity.toLocaleString()}</td>
                       <td className="px-4 py-3.5 text-center">
-                        {item.pickable ? (
-                          <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-500 mx-auto" />
-                        ) : (
-                          <span className="text-gray-300 dark:text-gray-600">—</span>
-                        )}
+                        <span className={item.pickable ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-400'}>
+                          {item.pickable ? 'Yes' : 'No'}
+                        </span>
                       </td>
                       <td className="px-4 py-3.5 text-center">
-                        {item.sellable ? (
-                          <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-500 mx-auto" />
-                        ) : (
-                          <span className="text-gray-300 dark:text-gray-600">—</span>
-                        )}
+                        <span className={item.sellable ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-400'}>
+                          {item.sellable ? 'Yes' : 'No'}
+                        </span>
                       </td>
                     </tr>
                   ))}
