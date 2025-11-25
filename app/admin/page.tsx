@@ -24,6 +24,76 @@ export default function AdminPage() {
   const [recentSnapshots, setRecentSnapshots] = useState<any[]>([])
   const { toast} = useToast()
 
+  const loadRecentSnapshots = async () => {
+    const accessToken = AuthManager.getValidToken()
+    if (!accessToken) return
+
+    try {
+      let accountId = snapshotCustomerId.trim()
+      if (/^\d+$/.test(accountId)) {
+        accountId = btoa(`CustomerAccount:${accountId}`)
+      }
+
+      const response = await fetch(`/api/sync/snapshots-list?customer_account_id=${accountId}`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        setRecentSnapshots(result.snapshots || [])
+      }
+    } catch (error) {
+      console.error('Failed to load snapshots:', error)
+    }
+  }
+
+  const abortCurrentSnapshot = async () => {
+    if (!currentSnapshotId) {
+      toast({
+        title: 'No snapshot to abort',
+        description: 'No snapshot is currently running',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const accessToken = AuthManager.getValidToken()
+    if (!accessToken) return
+
+    try {
+      const response = await fetch('/api/sync/snapshot-abort', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          snapshot_id: currentSnapshotId,
+          reason: 'Manual abort by user'
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        toast({
+          title: 'Snapshot aborted',
+          description: `Snapshot ${currentSnapshotId.substring(0, 8)}... has been aborted`,
+        })
+        setIsSyncingInventory(false)
+        setCurrentSnapshotId('')
+      } else {
+        throw new Error(result.error)
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Abort failed',
+        description: error.message,
+        variant: 'destructive',
+      })
+    }
+  }
+
   const runInventorySync = async () => {
     const accessToken = AuthManager.getValidToken()
     
@@ -452,20 +522,70 @@ export default function AdminPage() {
           </Button>
 
           {isSyncingInventory && snapshotStatus && (
-            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-              <div className="flex items-center gap-3">
-                <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
-                <div>
-                  <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                    {snapshotStatus}
-                  </p>
-                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                    Please keep this tab open
-                  </p>
+            <div className="space-y-3">
+              <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
+                    <div>
+                      <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                        {snapshotStatus}
+                      </p>
+                      <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                        Snapshot ID: {currentSnapshotId.substring(0, 12)}...
+                      </p>
+                    </div>
+                  </div>
+                  <Button 
+                    onClick={abortCurrentSnapshot}
+                    variant="destructive"
+                    size="sm"
+                  >
+                    Abort
+                  </Button>
                 </div>
               </div>
             </div>
           )}
+
+          <div className="mt-6">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold">Recent Snapshots</h3>
+              <Button onClick={loadRecentSnapshots} variant="outline" size="sm">
+                Refresh List
+              </Button>
+            </div>
+            {recentSnapshots.length > 0 ? (
+              <div className="border rounded-lg divide-y">
+                {recentSnapshots.map((snap) => (
+                  <div key={snap.snapshot_id} className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-mono">{snap.snapshot_id}</p>
+                        <p className="text-xs text-gray-500">{new Date(snap.created_at).toLocaleString()}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-xs font-medium ${
+                          snap.status === 'success' ? 'text-green-600' : 
+                          snap.status === 'error' ? 'text-red-600' : 
+                          'text-blue-600'
+                        }`}>
+                          {snap.status}
+                        </span>
+                        {snap.snapshot_url && (
+                          <p className="text-xs text-blue-600 mt-1">
+                            <a href={snap.snapshot_url} target="_blank" rel="noopener">Download</a>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">No recent snapshots. Run a sync to get started.</p>
+            )}
+          </div>
 
           {inventorySyncResult && (
             <div className={`p-4 rounded-lg border ${
