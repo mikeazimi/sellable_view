@@ -158,37 +158,8 @@ export default function InventoryPage() {
     try {
       const accountIdToUse = btoa(`CustomerAccount:${DEFAULT_CUSTOMER_ID}`)
       console.log('🔄 Force refresh from ShipHero, will update Supabase cache...')
-        // SUCCESS - Got data from Supabase!
-        console.log(`✅ Loaded ${supabaseResult.data.length} records from Supabase (instant!)`)
-        
-        setFlatInventory(supabaseResult.data)
-        
-        toast({
-          title: 'Inventory loaded from cache',
-          description: `${supabaseResult.data.length} records loaded instantly from Supabase`,
-        })
-        
-        return // Done - no ShipHero query needed!
-      }
       
-        if (supabaseResult.empty_database) {
-          // Database is empty - use live ShipHero query
-          console.log('⚠️ Database empty, using live ShipHero query')
-          toast({
-            title: 'Using live data',
-            description: 'Querying ShipHero directly (slower but works)',
-          })
-          // Fall through to ShipHero query below
-        } else {
-          // If we get here, there was an error - fall through to ShipHero query as backup
-          console.warn('Supabase query failed, falling back to ShipHero:', supabaseResult.error)
-          console.log('🔄 Falling back to real-time ShipHero query...')
-        }
-      } else {
-        console.log('🔄 Force refresh - skipping cache, querying ShipHero directly')
-      }
-      
-      // Step 1: Get filtered location names from Supabase (INSTANT!)
+      // Get filtered location names from Supabase (INSTANT!)
       let allowedLocations: Set<string> | null = null
       
       if (preLoadFilters.sellable !== 'all' || preLoadFilters.pickable !== 'all') {
