@@ -17,6 +17,8 @@ export default function AdminPage() {
   const [isSyncingInventory, setIsSyncingInventory] = useState(false)
   const [inventorySyncResult, setInventorySyncResult] = useState<any>(null)
   const [snapshotCustomerId, setSnapshotCustomerId] = useState('88774')
+  const [snapshotStatus, setSnapshotStatus] = useState('')
+  const [pollAttempt, setPollAttempt] = useState(0)
   const { toast} = useToast()
 
   const runInventorySync = async () => {
@@ -73,10 +75,12 @@ export default function AdminPage() {
 
       while (attempts < maxAttempts) {
         attempts++
+        setPollAttempt(attempts)
         
         await new Promise(resolve => setTimeout(resolve, 30000)) // 30 seconds
         
         console.log(`Checking status... (${attempts}/60)`)
+        setSnapshotStatus(`Polling... (${attempts}/60)`)
 
         const checkResponse = await fetch('/api/sync/snapshot-check', {
           method: 'POST',
@@ -88,8 +92,11 @@ export default function AdminPage() {
         })
 
         const checkResult = await checkResponse.json()
+        
+        console.log('Check result:', checkResult)
 
         if (checkResult.status === 'complete') {
+          setSnapshotStatus('Processing complete! Syncing to database...')
           setInventorySyncResult(checkResult)
           toast({
             title: 'Sync complete!',
@@ -97,10 +104,17 @@ export default function AdminPage() {
           })
           break
         } else if (checkResult.status === 'processing') {
+          setSnapshotStatus(`Snapshot generating... (${attempts}/60 - ${Math.round(attempts * 0.5)} min)`)
           console.log('Still processing...')
+        } else if (checkResult.status === 'error') {
+          throw new Error('Snapshot generation failed on ShipHero side')
         } else if (!checkResult.success) {
           throw new Error(checkResult.error)
         }
+      }
+
+      if (attempts >= maxAttempts) {
+        throw new Error('Snapshot timed out after 30 minutes - may still be processing on ShipHero')
       }
 
     } catch (error: any) {
@@ -408,6 +422,22 @@ export default function AdminPage() {
             <RefreshCw className={`w-4 h-4 mr-2 ${isSyncingInventory ? 'animate-spin' : ''}`} />
             {isSyncingInventory ? 'Syncing Inventory Snapshot...' : 'Run Inventory Snapshot Sync'}
           </Button>
+
+          {isSyncingInventory && snapshotStatus && (
+            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
+                <div>
+                  <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                    {snapshotStatus}
+                  </p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                    Please keep this tab open
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {inventorySyncResult && (
             <div className={`p-4 rounded-lg border ${
