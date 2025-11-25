@@ -457,7 +457,7 @@ export default function InventoryPage() {
                     value={preLoadFilters.pickable}
                     onChange={(e) => setPreLoadFilters(prev => ({ ...prev, pickable: e.target.value as any }))}
                     className="px-3 py-1.5 border rounded text-sm"
-                  >
+                            >
                     <option value="all">All Locations</option>
                     <option value="pickable">Pickable Only</option>
                     <option value="non-pickable">Non-Pickable Only</option>
