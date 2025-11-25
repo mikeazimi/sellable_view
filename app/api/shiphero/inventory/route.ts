@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 /**
- * Correct implementation per ShipHero API documentation
- * Uses warehouse_products with proper pagination structure
+ * Fetch ONE PAGE of warehouse_products from ShipHero
+ * Frontend handles pagination loop
  */
 export async function GET(request: NextRequest) {
   const requestStartTime = Date.now()
@@ -11,30 +11,22 @@ export async function GET(request: NextRequest) {
     const authHeader = request.headers.get('authorization')
     const accessToken = authHeader?.replace('Bearer ', '')
     const searchParams = request.nextUrl.searchParams
-    const customerAccountId = searchParams.get("customer_account_id")
+    const customerAccountId = searchParams.get("customer_account_id") || 'Q3VzdG9tZXJBY2NvdW50Ojg4Nzc0'
     const cursor = searchParams.get("cursor") || null
 
-    console.log('=== INVENTORY API (warehouse_products) ===')
-    console.log('Customer:', customerAccountId)
-    console.log('Cursor:', cursor || 'first page')
-
-    if (!accessToken || !customerAccountId) {
+    if (!accessToken) {
       return NextResponse.json({ 
         success: false, 
-        error: "Auth and customer_account_id required" 
-      }, { status: 400 });
+        error: "Authorization required" 
+      }, { status: 401 });
     }
 
-    // CORRECT query structure per ShipHero docs
     const query = `
-      query ($customer_account_id: String, $cursor: String) {
-        warehouse_products(
-          customer_account_id: $customer_account_id
-          active: true
-        ) {
+      query GetWarehouseProducts($customer_account_id: String, $cursor: String) {
+        warehouse_products(customer_account_id: $customer_account_id, active: true) {
           request_id
           complexity
-          data(first: 45, after: $cursor) {
+          data(first: 100, after: $cursor) {
             pageInfo {
               hasNextPage
               endCursor
@@ -47,7 +39,7 @@ export async function GET(request: NextRequest) {
                 product {
                   name
                 }
-                locations(first: 20) {
+                locations(first: 25) {
                   edges {
                     node {
                       quantity
@@ -65,14 +57,14 @@ export async function GET(request: NextRequest) {
           }
         }
       }
-    `;
+    `
 
     const variables = {
       customer_account_id: customerAccountId,
-      cursor: cursor
+      cursor
     }
 
-    console.log(`⏱️ 📤 Fetching page... (${((Date.now() - requestStartTime) / 1000).toFixed(2)}s elapsed)`)
+    console.log(`📤 Fetching ONE page (cursor: ${cursor ? cursor.substring(0, 20) + '...' : 'first page'})`)
 
     const response = await fetch('https://public-api.shiphero.com/graphql', {
       method: 'POST',
@@ -81,18 +73,10 @@ export async function GET(request: NextRequest) {
         'Authorization': `Bearer ${accessToken}`
       },
       body: JSON.stringify({ query, variables })
-    });
-
-    console.log('📥 Status:', response.status)
+    })
 
     if (!response.ok) {
-      const text = await response.text()
-      console.error('HTTP error:', text.substring(0, 500))
-      return NextResponse.json({ 
-        success: false, 
-        error: `HTTP ${response.status}`,
-        details: text.substring(0, 500)
-      }, { status: 500 });
+      throw new Error(`ShipHero API error: ${response.status}`)
     }
 
     const result = await response.json()
@@ -106,18 +90,24 @@ export async function GET(request: NextRequest) {
       }, { status: 500 });
     }
 
-    const elapsed = ((Date.now() - requestStartTime) / 1000).toFixed(2)
-    console.log(`⏱️ [${elapsed}s] ✅ Page fetched`)
+    const warehouseProducts = result.data?.warehouse_products
+    if (!warehouseProducts) {
+      throw new Error('No warehouse_products in response')
+    }
 
-    // Return full ShipHero response for frontend processing
+    const elapsed = ((Date.now() - requestStartTime) / 1000).toFixed(2)
+    console.log(`✅ Page fetched in ${elapsed}s | Complexity: ${warehouseProducts.complexity}`)
+
+    // Return the single page of data
     return NextResponse.json({
       success: true,
-      data: result.data,
-      meta: {
-        complexity: result.data?.warehouse_products?.complexity,
-        request_id: result.data?.warehouse_products?.request_id
-      }
+      data: warehouseProducts.data,
+      complexity: warehouseProducts.complexity,
+      request_id: warehouseProducts.request_id,
+      pageInfo: warehouseProducts.data.pageInfo,
+      fetch_time: elapsed
     });
+
   } catch (error: any) {
     console.error("💥", error);
     return NextResponse.json({ 

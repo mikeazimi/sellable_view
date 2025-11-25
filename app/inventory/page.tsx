@@ -151,99 +151,134 @@ export default function InventoryPage() {
     const startTimestamp = new Date().toLocaleTimeString()
     console.log('⏱️ ============================================')
     console.log(`⏱️ REFRESH STARTED at ${startTimestamp}`)
+    console.log(`⏱️ Config: 100 products/page, 25 locations/product`)
     console.log('⏱️ ============================================')
 
     setIsLoading(true)
     try {
       toast({
         title: 'Refreshing from ShipHero',
-        description: 'This may take a few minutes. Check console for progress...',
+        description: 'Fetching pages... Check console for progress',
       })
 
-      console.log('📊 Starting ShipHero refresh with real-time updates...')
+      const customerAccountId = 'Q3VzdG9tZXJBY2NvdW50Ojg4Nzc0' // base64 encoded 88774
+      let allItems: any[] = []
+      let cursor: string | null = null
+      let hasNextPage = true
+      let pageCount = 0
+      let totalCreditsUsed = 0
 
-      // Start the refresh job (returns immediately with job_id)
-      const startResponse = await fetch('/api/refresh-inventory', {
+      // Frontend pagination loop
+      while (hasNextPage) {
+        pageCount++
+        const pageStart = Date.now()
+
+        // Small delay between requests (except first page)
+        if (pageCount > 1) {
+          await new Promise(resolve => setTimeout(resolve, 300))
+        }
+
+        console.log(`⏱️ [${((Date.now() - startTime) / 1000).toFixed(2)}s] 📤 Fetching page ${pageCount}...`)
+
+        // Fetch ONE page from backend
+        const params = new URLSearchParams({
+          customer_account_id: customerAccountId
+        })
+        if (cursor) {
+          params.set('cursor', cursor)
+        }
+
+        const response = await fetch(`/api/shiphero/inventory?${params.toString()}`, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`
+          }
+        })
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch page ${pageCount}: ${response.status}`)
+        }
+
+        const result = await response.json()
+
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to fetch page')
+        }
+
+        // Process products from this page
+        const products = result.data.edges || []
+        for (const edge of products) {
+          const product = edge.node
+          const locations = product.locations?.edges || []
+          
+          for (const locEdge of locations) {
+            const loc = locEdge.node
+            if (loc.quantity > 0) {
+              allItems.push({
+                sku: product.sku,
+                productName: product.product?.name || product.sku,
+                quantity: loc.quantity,
+                location: loc.location.name,
+                pickable: loc.location.pickable,
+                sellable: loc.location.sellable,
+                warehouse: product.warehouse_identifier,
+                type: 'Bin',
+                barcode: ''
+              })
+            }
+          }
+        }
+
+        const pageElapsed = ((Date.now() - pageStart) / 1000).toFixed(2)
+        totalCreditsUsed += result.complexity || 0
+
+        console.log(`⏱️ [${((Date.now() - startTime) / 1000).toFixed(2)}s] ✅ Page ${pageCount} complete (${pageElapsed}s)`)
+        console.log(`   📊 Items: ${allItems.length} total | Page used: ${result.complexity} credits | Total used: ${totalCreditsUsed} credits`)
+
+        // Check if more pages
+        hasNextPage = result.pageInfo.hasNextPage
+        cursor = result.pageInfo.endCursor
+      }
+
+      console.log(`⏱️ [${((Date.now() - startTime) / 1000).toFixed(2)}s] 📊 All pages fetched: ${allItems.length} items from ${pageCount} pages`)
+
+      // Now cache to Supabase
+      console.log(`⏱️ [${((Date.now() - startTime) / 1000).toFixed(2)}s] 💾 Caching to Supabase...`)
+
+      const cacheResponse = await fetch('/api/inventory/cache-results', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          items: allItems,
           customer_account_id: selectedAccountId,
-          access_token: accessToken
+          is_final: true
         }),
       })
 
-      const { job_id } = await startResponse.json()
-      console.log(`Job started: ${job_id}`)
-      
-      // Poll for updates every 500ms
-      let lastLogCount = 0
-      let result: any = null
-      
-      const pollInterval = setInterval(async () => {
-        try {
-          const pollResponse = await fetch(`/api/refresh-inventory?job_id=${job_id}`)
-          const jobStatus = await pollResponse.json()
-          
-          // Output new logs to console
-          if (jobStatus.logs && jobStatus.logs.length > lastLogCount) {
-            const newLogs = jobStatus.logs.slice(lastLogCount)
-            newLogs.forEach((log: string) => console.log(log))
-            lastLogCount = jobStatus.logs.length
-          }
-          
-          // Check if job is complete
-          if (jobStatus.status === 'completed' || jobStatus.status === 'failed') {
-            clearInterval(pollInterval)
-            result = jobStatus.result || {}
-            
-            if (jobStatus.status === 'failed') {
-              throw new Error(jobStatus.error || 'Refresh failed')
-            }
-          }
-        } catch (err) {
-          console.error('Polling error:', err)
-        }
-      }, 500)
-      
-      // Wait for job to complete (with timeout)
-      const maxWait = 300000 // 5 minutes
-      const startWait = Date.now()
-      
-      while (!result && (Date.now() - startWait) < maxWait) {
-        await new Promise(resolve => setTimeout(resolve, 1000))
+      if (!cacheResponse.ok) {
+        throw new Error('Failed to cache results')
       }
+
+      console.log(`⏱️ [${((Date.now() - startTime) / 1000).toFixed(2)}s] ✅ Cached to Supabase`)
+
+      // Reload from Supabase to show updated data
+      await loadFromSupabase()
       
-      clearInterval(pollInterval)
+      const totalTime = Date.now() - startTime
+      const endTimestamp = new Date().toLocaleTimeString()
       
-      if (!result) {
-        throw new Error('Job timeout - took longer than 5 minutes')
-      }
+      console.log('⏱️ ============================================')
+      console.log(`⏱️ REFRESH COMPLETE at ${endTimestamp}`)
+      console.log(`⏱️ Total Duration: ${(totalTime / 1000).toFixed(2)}s (${(totalTime / 60000).toFixed(2)} minutes)`)
+      console.log(`⏱️ Pages fetched: ${pageCount}`)
+      console.log(`⏱️ Items synced: ${allItems.length}`)
+      console.log(`💳 Total credits used: ${totalCreditsUsed}`)
+      console.log('⏱️ ============================================')
       
-      if (result.success) {
-        // Reload from Supabase to show updated data
-        const reloadStart = Date.now()
-        console.log(`⏱️ Reloading from Supabase... (${((reloadStart - startTime) / 1000).toFixed(2)}s elapsed)`)
-        
-        await loadFromSupabase()
-        
-        const totalTime = Date.now() - startTime
-        const endTimestamp = new Date().toLocaleTimeString()
-        
-        console.log('⏱️ ============================================')
-        console.log(`⏱️ REFRESH COMPLETE at ${endTimestamp}`)
-        console.log(`⏱️ Total Duration: ${(totalTime / 1000).toFixed(2)} seconds (${(totalTime / 60000).toFixed(2)} minutes)`)
-        console.log(`⏱️ Pages fetched: ${result.pages_fetched || 'N/A'}`)
-        console.log(`⏱️ Records synced: ${result.items_synced || 'N/A'}`)
-        console.log(`💳 Total credits used: ${result.total_credits_used || 'N/A'}`)
-        console.log('⏱️ ============================================')
-        
-        toast({
-          title: 'Refresh complete',
-          description: `${result.items_synced} items in ${(totalTime / 1000).toFixed(1)}s`,
-        })
-      } else {
-        throw new Error(result.error || 'Failed to refresh')
-      }
+      toast({
+        title: 'Refresh complete',
+        description: `${allItems.length} items in ${(totalTime / 1000).toFixed(1)}s`,
+      })
+
     } catch (error: any) {
       const totalTime = Date.now() - startTime
       console.error(`⏱️ Refresh error after ${(totalTime / 1000).toFixed(2)}s:`, error)
