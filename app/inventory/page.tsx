@@ -242,7 +242,7 @@ export default function InventoryPage() {
       let cursor: string | null = null
       let pageCount = 0
 
-      while (hasNextPage && pageCount < 50) {
+      while (hasNextPage && pageCount < 500) {
         pageCount++
         
         const filterParams = new URLSearchParams({
@@ -328,11 +328,19 @@ export default function InventoryPage() {
         cursor = warehouseData?.pageInfo?.endCursor || null
 
         if (hasNextPage) {
-          if (pageCount % 5 === 0) {
-            console.log(`⏸️  Extended pause after page ${pageCount} (3s)...`)
-            await new Promise(resolve => setTimeout(resolve, 3000))
-          } else {
-            await new Promise(resolve => setTimeout(resolve, 1000))
+          // Base pause: 4 seconds between all pages
+          await new Promise(resolve => setTimeout(resolve, 4000))
+          
+          // Additional 4 seconds after every 5 pages (total 8s)
+          if (pageCount % 5 === 0 && pageCount % 10 !== 0) {
+            console.log(`⏸️  5-page pause after page ${pageCount} (+4s = 8s total)...`)
+            await new Promise(resolve => setTimeout(resolve, 4000))
+          }
+          
+          // Additional 10 seconds after every 10 pages (total 14s)
+          if (pageCount % 10 === 0) {
+            console.log(`⏸️  10-page pause after page ${pageCount} (+10s = 14s total)...`)
+            await new Promise(resolve => setTimeout(resolve, 10000))
           }
         }
       }
