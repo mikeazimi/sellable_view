@@ -22,7 +22,106 @@ export default function AdminPage() {
   const [pollAttempt, setPollAttempt] = useState(0)
   const [currentSnapshotId, setCurrentSnapshotId] = useState('')
   const [recentSnapshots, setRecentSnapshots] = useState<any[]>([])
+  const [inventoryCsvData, setInventoryCsvData] = useState<any[]>([])
+  const [isUploadingInventory, setIsUploadingInventory] = useState(false)
+  const [inventoryUploadProgress, setInventoryUploadProgress] = useState('')
   const { toast} = useToast()
+
+  const handleInventoryCsvUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const text = e.target?.result as string
+      const lines = text.split('\n').filter(line => line.trim())
+      
+      // Parse CSV
+      const headers = lines[0].split(',')
+      const data = lines.slice(1).map(line => {
+        const values = line.split(',')
+        const obj: any = {}
+        headers.forEach((header, i) => {
+          obj[header.trim()] = values[i]?.trim()
+        })
+        return obj
+      })
+
+      setInventoryCsvData(data)
+      toast({
+        title: 'CSV loaded',
+        description: `${data.length} records ready to upload`,
+      })
+    }
+    reader.readAsText(file)
+  }
+
+  const uploadInventorySnapshot = async () => {
+    if (inventoryCsvData.length === 0) {
+      toast({
+        title: 'No data',
+        description: 'Please select a CSV file first',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setIsUploadingInventory(true)
+    setInventoryUploadProgress('Starting upload...')
+
+    try {
+      const accessToken = AuthManager.getValidToken()
+      if (!accessToken) throw new Error('Not authenticated')
+
+      // Convert customer ID
+      let accountId = snapshotCustomerId.trim()
+      if (/^\d+$/.test(accountId)) {
+        accountId = btoa(`CustomerAccount:${accountId}`)
+      }
+
+      // Upload in chunks of 500
+      const chunkSize = 500
+      let uploaded = 0
+
+      for (let i = 0; i < inventoryCsvData.length; i += chunkSize) {
+        const chunk = inventoryCsvData.slice(i, i + chunkSize)
+        setInventoryUploadProgress(`Uploading ${i + 1}-${i + chunk.length} of ${inventoryCsvData.length}...`)
+
+        const response = await fetch('/api/upload-inventory-snapshot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            chunk,
+            customer_account_id: accountId
+          })
+        })
+
+        const result = await response.json()
+        if (!result.success) {
+          throw new Error(result.error)
+        }
+
+        uploaded += result.uploaded
+      }
+
+      setInventoryUploadProgress(`✅ Complete! ${uploaded} records uploaded`)
+      toast({
+        title: 'Upload complete',
+        description: `${uploaded} inventory records saved to Supabase`,
+      })
+
+    } catch (error: any) {
+      console.error('Upload error:', error)
+      setInventoryUploadProgress(`❌ Error: ${error.message}`)
+      toast({
+        title: 'Upload failed',
+        description: error.message,
+        variant: 'destructive',
+      })
+    } finally {
+      setIsUploadingInventory(false)
+    }
+  }
 
   const loadRecentSnapshots = async () => {
     const accessToken = AuthManager.getValidToken()
