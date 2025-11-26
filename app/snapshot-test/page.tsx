@@ -416,26 +416,24 @@ export default function SnapshotTestPage() {
           const sellable = bin.sellable ? 'yes' : 'no'
           const pickable = sellable // Snapshot doesn't have separate pickable field
           
-          // Only include if quantity > 0
-          if (quantity > 0) {
-            rows.push([
-              `"${productName}"`,
-              `"${sku}"`,
-              `"Primary"`,
-              `"DONNI. HQ"`,
-              `"${locationName}"`,
-              `"Bin"`,
-              quantity,
-              `"yes"`,
-              `"${pickable}"`,
-              `"${sellable}"`,
-              `""`,
-              `""`,
-              `""`,
-              `""`,
-              `""`
-            ].join(','))
-          }
+          // Include ALL locations (even with quantity 0)
+          rows.push([
+            `"${productName}"`,
+            `"${sku}"`,
+            `"Primary"`,
+            `"DONNI. HQ"`,
+            `"${locationName}"`,
+            `"Bin"`,
+            quantity,
+            `"yes"`,
+            `"${pickable}"`,
+            `"${sellable}"`,
+            `""`,
+            `""`,
+            `""`,
+            `""`,
+            `""`
+          ].join(','))
         })
       })
     })
