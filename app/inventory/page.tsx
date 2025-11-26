@@ -151,8 +151,9 @@ export default function InventoryPage() {
     const startTimestamp = new Date().toLocaleTimeString()
     console.log('⏱️ ============================================')
     console.log(`⏱️ REFRESH STARTED at ${startTimestamp}`)
-    console.log(`⏱️ Config: 100 products/page, 25 locations/product (~2,500 credits/page)`)
-    console.log(`⏱️ Delays: 10s between pages, 30s backend auto-wait on throttle`)
+    console.log(`⏱️ Config: 10 products/page, 200 locations/product (~2,000 credits/page)`)
+    console.log(`⏱️ Delays: 35s between pages (prevents throttling), 30s backend auto-wait if needed`)
+    console.log(`⏱️ Credit math: 2,000 used/page, 2,100 regenerate in 35s = net +100/page`)
     console.log('⏱️ ============================================')
 
     setIsLoading(true)
@@ -260,10 +261,11 @@ export default function InventoryPage() {
         hasNextPage = result.pageInfo.hasNextPage
         cursor = result.pageInfo.endCursor
 
-        // Proactive delay to manage credit rate (10 seconds between pages)
+        // Proactive delay to manage credit rate (35 seconds between pages)
+        // Math: 2,000 credits/page ÷ 60 credits/sec = 33.3s needed + 1.7s buffer = 35s
         if (hasNextPage) {
-          console.log(`⏸️  Waiting 10s before next page...`)
-          await new Promise(resolve => setTimeout(resolve, 10000))
+          console.log(`⏸️  Waiting 35s before next page (credit regeneration)...`)
+          await new Promise(resolve => setTimeout(resolve, 35000))
         }
       }
 
