@@ -174,14 +174,17 @@ export default function SnapshotTestPage() {
             
             console.log('   Snapshot data structure:', Object.keys(snapshotData))
             
-            // Calculate statistics - data structure varies, try different formats
+            // Calculate statistics
+            // ShipHero returns products as an object where keys are SKUs
             let products = []
-            if (Array.isArray(snapshotData)) {
-              products = snapshotData
-            } else if (snapshotData.products && Array.isArray(snapshotData.products)) {
+            if (snapshotData.products && typeof snapshotData.products === 'object') {
+              // Convert object to array
+              products = Object.values(snapshotData.products)
+              console.log(`   Converted ${products.length} products from object to array`)
+            } else if (Array.isArray(snapshotData.products)) {
               products = snapshotData.products
-            } else if (snapshotData.data && Array.isArray(snapshotData.data)) {
-              products = snapshotData.data
+            } else if (Array.isArray(snapshotData)) {
+              products = snapshotData
             } else {
               console.log('❌ Unexpected data structure:', snapshotData)
               throw new Error('Unexpected snapshot data structure')
