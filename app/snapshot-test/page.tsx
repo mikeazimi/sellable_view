@@ -175,12 +175,21 @@ export default function SnapshotTestPage() {
             console.log('   Snapshot data structure:', Object.keys(snapshotData))
             
             // Calculate statistics
-            // ShipHero returns products as an object where keys are SKUs
+            // ShipHero snapshot structure: products -> account_id -> SKU -> product data
             let products = []
             if (snapshotData.products && typeof snapshotData.products === 'object') {
-              // Convert object to array
-              products = Object.values(snapshotData.products)
-              console.log(`   Converted ${products.length} products from object to array`)
+              // Get the account object (first level)
+              const accountKeys = Object.keys(snapshotData.products)
+              console.log(`   Account keys in products:`, accountKeys)
+              
+              if (accountKeys.length > 0) {
+                const accountId = accountKeys[0] // Usually just one account
+                const productsByAccount = snapshotData.products[accountId]
+                
+                // Now convert the SKU object to array
+                products = Object.values(productsByAccount)
+                console.log(`   Converted ${products.length} products for account ${accountId}`)
+              }
             } else if (Array.isArray(snapshotData.products)) {
               products = snapshotData.products
             } else if (Array.isArray(snapshotData)) {
@@ -196,15 +205,24 @@ export default function SnapshotTestPage() {
             let productsWithLocations = 0
 
             products.forEach((product: any) => {
-              const locations = product.locations || []
-              const locationCount = locations.length
+              // warehouse_products is an object keyed by warehouse ID
+              const warehouseProducts = product.warehouse_products || {}
+              const warehouses = Object.values(warehouseProducts)
               
-              if (locationCount > 0) {
-                productsWithLocations++
-                totalLocations += locationCount
-                if (locationCount > maxLocations) {
-                  maxLocations = locationCount
+              warehouses.forEach((wh: any) => {
+                const bins = wh.item_bins || {}
+                const binCount = Object.keys(bins).length
+                
+                if (binCount > 0) {
+                  totalLocations += binCount
+                  if (binCount > maxLocations) {
+                    maxLocations = binCount
+                  }
                 }
+              })
+              
+              if (totalLocations > 0) {
+                productsWithLocations++
               }
             })
 
