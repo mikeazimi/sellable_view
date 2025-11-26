@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Play, StopCircle } from 'lucide-react'
+import { Play, StopCircle, Download } from 'lucide-react'
 import { AuthManager } from '@/lib/auth-manager'
 
 export default function SnapshotTestPage() {
@@ -17,6 +17,7 @@ export default function SnapshotTestPage() {
   const [checkCount, setCheckCount] = useState(0)
   const [elapsedTime, setElapsedTime] = useState('0m 0s')
   const [results, setResults] = useState<any>(null)
+  const [snapshotData, setSnapshotData] = useState<any>(null)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const startTimeRef = useRef<number>(0)
   const elapsedIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -253,6 +254,7 @@ export default function SnapshotTestPage() {
             console.log('═══════════════════════════════════════════════')
 
             setResults(stats)
+            setSnapshotData(downloadData.data)
             setStatus('Completed!')
             setIsRunning(false)
             setElapsedTime(formatElapsedTime(finalElapsed))
@@ -361,11 +363,96 @@ export default function SnapshotTestPage() {
       setSnapshotId('')
       setCheckCount(0)
       setElapsedTime('0m 0s')
+      setResults(null)
+      setSnapshotData(null)
 
     } catch (error: any) {
       console.error('❌ Abort error:', error.message)
       setStatus(`Error: ${error.message}`)
     }
+  }
+
+  const exportSnapshotCSV = () => {
+    if (!snapshotData) {
+      console.log('❌ No snapshot data to export')
+      return
+    }
+
+    console.log('📥 Exporting snapshot to CSV...')
+
+    // Get products object
+    const productsObj = snapshotData.products || {}
+    const accountKeys = Object.keys(productsObj)
+    
+    if (accountKeys.length === 0) {
+      console.log('❌ No products found')
+      return
+    }
+
+    const accountId = accountKeys[0]
+    const productsByAccount = productsObj[accountId]
+    const products = Object.values(productsByAccount)
+
+    // Headers matching ShipHero format
+    const headers = ['Item', 'Sku', 'Warehouse', 'Client', 'Location', 'Type', 'Units', 'Active Item', 'Pickable', 'Sellable', 'Active Lot', 'Lot Name', 'Exp Date', 'Days to Expire', 'Creation Date']
+    
+    const rows: string[] = [headers.map(h => `"${h}"`).join(',')]
+
+    // Flatten products into CSV rows
+    products.forEach((product: any) => {
+      const sku = product.sku || ''
+      const productName = sku // Snapshot doesn't include product name
+      
+      const warehouseProducts = product.warehouse_products || {}
+      const warehouses = Object.values(warehouseProducts)
+      
+      warehouses.forEach((wh: any) => {
+        const warehouseId = wh.warehouse_id || ''
+        const bins = wh.item_bins || {}
+        
+        Object.values(bins).forEach((bin: any) => {
+          const locationName = bin.location_name || ''
+          const quantity = bin.quantity || 0
+          const sellable = bin.sellable ? 'yes' : 'no'
+          const pickable = sellable // Snapshot doesn't have separate pickable field
+          
+          // Only include if quantity > 0
+          if (quantity > 0) {
+            rows.push([
+              `"${productName}"`,
+              `"${sku}"`,
+              `"Primary"`,
+              `"DONNI. HQ"`,
+              `"${locationName}"`,
+              `"Bin"`,
+              quantity,
+              `"yes"`,
+              `"${pickable}"`,
+              `"${sellable}"`,
+              `""`,
+              `""`,
+              `""`,
+              `""`,
+              `""`
+            ].join(','))
+          }
+        })
+      })
+    })
+
+    const csvContent = rows.join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0]
+    a.download = `Snapshot_${snapshotId.substring(0, 8)}_${timestamp}.csv`
+    document.body.appendChild(a)
+    a.click()
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+
+    console.log(`✅ Exported ${rows.length - 1} location records to CSV`)
   }
 
   return (
@@ -461,7 +548,17 @@ export default function SnapshotTestPage() {
           {/* Results */}
           {results && (
             <div className="border-t pt-4 bg-green-50 dark:bg-green-950/20 rounded-lg p-4">
-              <h3 className="font-semibold mb-3 text-green-900 dark:text-green-100">✅ Results:</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-green-900 dark:text-green-100">✅ Results:</h3>
+                <Button
+                  onClick={exportSnapshotCSV}
+                  variant="outline"
+                  size="sm"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Export CSV
+                </Button>
+              </div>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-700 dark:text-gray-300">Total products:</span>
