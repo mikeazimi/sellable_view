@@ -15,6 +15,14 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error
 
+    // Handle empty table
+    if (!data || data.length === 0) {
+      return NextResponse.json({
+        success: true,
+        schedules: []
+      })
+    }
+
     // Transform from database format to frontend format
     const schedules = data.map(schedule => ({
       id: schedule.id,
