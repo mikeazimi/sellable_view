@@ -8,16 +8,25 @@ import { NextRequest, NextResponse } from "next/server";
  * 3. Manual trigger from frontend
  */
 
+interface ScheduleFilters {
+  warehouse?: string
+  sellable?: 'all' | 'sellable' | 'non-sellable'
+  pickable?: 'all' | 'pickable' | 'non-pickable'
+  sku?: string
+  location?: string
+}
+
 interface ScheduleConfig {
   customerAccountId: string
   email: string
   scheduleName?: string
+  filters?: ScheduleFilters
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { customerAccountId, email, scheduleName } = body as ScheduleConfig
+    const { customerAccountId, email, scheduleName, filters } = body as ScheduleConfig
 
     if (!customerAccountId || !email) {
       return NextResponse.json(
@@ -83,6 +92,50 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ [SCHEDULER] Fetched ${allInventory.length} inventory items across ${pageCount} pages`)
 
+    // Step 1.5: Apply filters if specified
+    let filteredInventory = allInventory
+    
+    if (filters) {
+      console.log(`🔍 [SCHEDULER] Applying filters:`, filters)
+      
+      filteredInventory = allInventory.filter(item => {
+        // Warehouse filter
+        if (filters.warehouse && item.warehouse !== filters.warehouse) {
+          return false
+        }
+        
+        // Sellable filter
+        if (filters.sellable === 'sellable' && !item.sellable) {
+          return false
+        }
+        if (filters.sellable === 'non-sellable' && item.sellable) {
+          return false
+        }
+        
+        // Pickable filter
+        if (filters.pickable === 'pickable' && !item.pickable) {
+          return false
+        }
+        if (filters.pickable === 'non-pickable' && item.pickable) {
+          return false
+        }
+        
+        // SKU filter (case-insensitive partial match)
+        if (filters.sku && !item.sku?.toLowerCase().includes(filters.sku.toLowerCase())) {
+          return false
+        }
+        
+        // Location filter (case-insensitive partial match)
+        if (filters.location && !item.location?.toLowerCase().includes(filters.location.toLowerCase())) {
+          return false
+        }
+        
+        return true
+      })
+      
+      console.log(`✅ [SCHEDULER] Filtered to ${filteredInventory.length} items (from ${allInventory.length})`)
+    }
+
     // Step 2: Cache to Supabase
     console.log(`💾 [SCHEDULER] Caching to Supabase...`)
     
@@ -104,7 +157,7 @@ export async function POST(request: NextRequest) {
       console.log(`✅ [SCHEDULER] Cached to Supabase successfully`)
     }
 
-    // Step 3: Generate and email CSV + PDF reports
+    // Step 3: Generate and email CSV + PDF reports (using filtered data)
     console.log(`📧 [SCHEDULER] Generating and emailing reports...`)
     
     const emailResponse = await fetch(
@@ -114,9 +167,10 @@ export async function POST(request: NextRequest) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email,
-          inventory: allInventory,
+          inventory: filteredInventory,
           customerAccountId,
-          scheduleName: scheduleName || 'Scheduled Inventory Report'
+          scheduleName: scheduleName || 'Scheduled Inventory Report',
+          filters
         })
       }
     )
@@ -131,8 +185,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: `Inventory query completed and report sent to ${email}`,
-      itemsProcessed: allInventory.length,
-      pagesProcessed: pageCount
+      itemsTotal: allInventory.length,
+      itemsFiltered: filteredInventory.length,
+      itemsProcessed: filteredInventory.length,
+      pagesProcessed: pageCount,
+      filtersApplied: filters || null
     })
 
   } catch (error: any) {

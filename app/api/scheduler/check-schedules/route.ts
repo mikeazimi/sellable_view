@@ -1,17 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabase";
 
 /**
- * Cron Job Handler - Checks if any schedules should run now
+ * Cron Job Handler - Checks Supabase for schedules that should run now
  * Triggered by Vercel Cron every 5 minutes
  */
-
-interface ScheduleItem {
-  id: string
-  days: string[]
-  time: string
-  enabled: boolean
-  email: string
-}
 
 // Map day abbreviations to JavaScript day numbers
 const dayMap: { [key: string]: number } = {
@@ -24,13 +17,13 @@ const dayMap: { [key: string]: number } = {
   'Sat': 6
 }
 
-function shouldRunSchedule(schedule: ScheduleItem, now: Date): boolean {
+function shouldRunSchedule(schedule: any, now: Date): boolean {
   // Check if schedule is enabled
   if (!schedule.enabled) return false
 
   // Check if today is in the schedule
   const currentDay = now.getDay()
-  const scheduleDays = schedule.days.map(day => dayMap[day])
+  const scheduleDays = (schedule.days || []).map((day: string) => dayMap[day])
   if (!scheduleDays.includes(currentDay)) return false
 
   // Check if current time matches schedule time (within 5-minute window)
@@ -48,7 +41,8 @@ function shouldRunSchedule(schedule: ScheduleItem, now: Date): boolean {
 
 export async function GET(request: NextRequest) {
   try {
-    console.log(`🕐 [CRON] Checking schedules at ${new Date().toISOString()}`)
+    const now = new Date()
+    console.log(`🕐 [CRON] Checking schedules at ${now.toISOString()}`)
 
     // Verify cron authorization (Vercel sends this header)
     const authHeader = request.headers.get('authorization')
@@ -62,20 +56,119 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get schedules from storage
-    // Note: In production, these would be stored in a database
-    // For now, we'll check if there's a way to get them from localStorage (which won't work server-side)
-    // Instead, we'll need to store schedules in a database or environment variable
+    // Fetch all enabled schedules from Supabase
+    const { data: schedules, error } = await supabaseAdmin
+      .from('refresh_schedules')
+      .select('*')
+      .eq('enabled', true)
 
-    // For now, return a success response indicating the cron is working
-    console.log(`✅ [CRON] Cron job executed successfully`)
-    console.log(`ℹ️  [CRON] Note: Schedules are currently stored in localStorage and need to be migrated to a database for server-side access`)
+    if (error) {
+      console.error(`❌ [CRON] Error fetching schedules:`, error)
+      throw error
+    }
+
+    if (!schedules || schedules.length === 0) {
+      console.log(`ℹ️  [CRON] No enabled schedules found`)
+      return NextResponse.json({
+        success: true,
+        message: 'No schedules to run',
+        timestamp: now.toISOString()
+      })
+    }
+
+    console.log(`📋 [CRON] Found ${schedules.length} enabled schedules`)
+
+    // Check which schedules should run now
+    const schedulesToRun = schedules.filter(schedule => shouldRunSchedule(schedule, now))
+
+    if (schedulesToRun.length === 0) {
+      console.log(`ℹ️  [CRON] No schedules match current time`)
+      return NextResponse.json({
+        success: true,
+        message: 'No schedules to run at this time',
+        timestamp: now.toISOString(),
+        checked: schedules.length
+      })
+    }
+
+    console.log(`🚀 [CRON] Running ${schedulesToRun.length} schedule(s)...`)
+
+    // Trigger each schedule
+    const results = []
+    
+    for (const schedule of schedulesToRun) {
+      try {
+        console.log(`▶️ [CRON] Triggering schedule: ${schedule.name}`)
+
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/scheduler/run-inventory`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${process.env.SHIPHERO_ACCESS_TOKEN}`
+            },
+            body: JSON.stringify({
+              customerAccountId: schedule.customer_account_id,
+              email: schedule.email,
+              scheduleName: schedule.name,
+              filters: {
+                warehouse: schedule.filter_warehouse,
+                sellable: schedule.filter_sellable || 'all',
+                pickable: schedule.filter_pickable || 'all',
+                sku: schedule.filter_sku,
+                location: schedule.filter_location
+              }
+            })
+          }
+        )
+
+        const result = await response.json()
+
+        // Update last run timestamp
+        await supabaseAdmin
+          .from('refresh_schedules')
+          .update({
+            last_run_at: now.toISOString(),
+            last_run_status: result.success ? 'success' : 'failed'
+          })
+          .eq('id', schedule.id)
+
+        results.push({
+          schedule_id: schedule.id,
+          schedule_name: schedule.name,
+          success: result.success,
+          message: result.message || result.error
+        })
+
+        console.log(`✅ [CRON] Schedule ${schedule.name} completed`)
+
+      } catch (error: any) {
+        console.error(`❌ [CRON] Schedule ${schedule.name} failed:`, error)
+        
+        // Update as failed
+        await supabaseAdmin
+          .from('refresh_schedules')
+          .update({
+            last_run_at: now.toISOString(),
+            last_run_status: 'failed'
+          })
+          .eq('id', schedule.id)
+
+        results.push({
+          schedule_id: schedule.id,
+          schedule_name: schedule.name,
+          success: false,
+          error: error.message
+        })
+      }
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Cron job executed',
-      timestamp: new Date().toISOString(),
-      note: 'Schedules need to be stored in a database (Supabase) for automated execution'
+      message: `Executed ${schedulesToRun.length} schedule(s)`,
+      timestamp: now.toISOString(),
+      results
     })
 
   } catch (error: any) {

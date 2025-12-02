@@ -5,8 +5,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Clock, Calendar, Plus, Trash2, Save, Play } from 'lucide-react'
+import { Clock, Calendar, Plus, Trash2, Save, Play, Filter } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+
+interface ScheduleFilters {
+  warehouse?: string
+  sellable: 'all' | 'sellable' | 'non-sellable'
+  pickable: 'all' | 'pickable' | 'non-pickable'
+  sku?: string
+  location?: string
+}
 
 interface ScheduleItem {
   id: string
@@ -14,6 +23,8 @@ interface ScheduleItem {
   time: string
   enabled: boolean
   email: string
+  name?: string
+  filters: ScheduleFilters
 }
 
 interface AccountId {
@@ -34,22 +45,15 @@ export default function SettingsPage() {
   const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
   useEffect(() => {
-    // Load saved schedules and account IDs
-    const savedSchedules = localStorage.getItem('refresh_schedules')
+    // Load accounts from localStorage
     const savedAccounts = localStorage.getItem('account_ids')
     const savedSelectedAccount = localStorage.getItem('selected_account_id')
-    
-    if (savedSchedules) {
-      setSchedules(JSON.parse(savedSchedules))
-    }
     
     if (savedAccounts) {
       const accounts = JSON.parse(savedAccounts)
       setAccountIds(accounts)
-      // Set selected account to saved value or first account
       setSelectedAccountId(savedSelectedAccount || accounts[0]?.value || '88774')
     } else {
-      // Set default account
       const defaultAccount = {
         id: '1',
         value: '88774',
@@ -58,23 +62,69 @@ export default function SettingsPage() {
       setAccountIds([defaultAccount])
       setSelectedAccountId('88774')
     }
+
+    // Load schedules from Supabase
+    loadSchedulesFromSupabase()
   }, [])
 
-  const handleSaveSchedules = () => {
-    localStorage.setItem('refresh_schedules', JSON.stringify(schedules))
-    toast({
-      title: 'Schedules saved',
-      description: 'Your refresh schedules have been saved',
-    })
+  const loadSchedulesFromSupabase = async () => {
+    try {
+      const response = await fetch('/api/schedules')
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.schedules) {
+          setSchedules(data.schedules)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load schedules:', error)
+    }
+  }
+
+  const handleSaveSchedules = async () => {
+    try {
+      const response = await fetch('/api/schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          schedules: schedules.map(s => ({
+            ...s,
+            customer_account_id: selectedAccountId,
+            name: `${s.days.join(', ')} at ${s.time}`
+          }))
+        })
+      })
+
+      if (response.ok) {
+        toast({
+          title: 'Schedules saved',
+          description: 'Your refresh schedules have been saved to the database',
+        })
+        // Reload to get IDs from database
+        await loadSchedulesFromSupabase()
+      } else {
+        throw new Error('Failed to save schedules')
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to save schedules',
+        variant: 'destructive',
+      })
+    }
   }
 
   const handleAddSchedule = () => {
     const newSchedule: ScheduleItem = {
-      id: Date.now().toString(),
+      id: `temp_${Date.now()}`,
       days: [],
       time: '09:00',
       enabled: true,
-      email: ''
+      email: '',
+      filters: {
+        sellable: 'all',
+        pickable: 'all'
+      }
     }
     setSchedules([...schedules, newSchedule])
   }
@@ -105,6 +155,21 @@ export default function SettingsPage() {
     setSchedules(schedules.map(s => 
       s.id === scheduleId ? { ...s, email } : s
     ))
+  }
+
+  const handleUpdateFilter = (scheduleId: string, filterKey: keyof ScheduleFilters, value: any) => {
+    setSchedules(schedules.map(s => {
+      if (s.id === scheduleId) {
+        return {
+          ...s,
+          filters: {
+            ...s.filters,
+            [filterKey]: value
+          }
+        }
+      }
+      return s
+    }))
   }
 
   const handleSelectAccount = (accountValue: string) => {
@@ -204,7 +269,8 @@ export default function SettingsPage() {
         body: JSON.stringify({
           customerAccountId,
           email: schedule.email,
-          scheduleName: `Manual Run - ${schedule.time} ${schedule.days.join(', ')}`
+          scheduleName: `Manual Run - ${schedule.time} ${schedule.days.join(', ')}`,
+          filters: schedule.filters
         })
       })
 
@@ -430,6 +496,77 @@ export default function SettingsPage() {
                     >
                       <Trash2 className="w-4 h-4 text-red-500" />
                     </Button>
+                  </div>
+
+                  {/* Filters */}
+                  <div className="border-t border-gray-200 pt-3">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Filter className="w-4 h-4 text-gray-500" />
+                      <Label className="text-sm font-medium text-gray-700">Report Filters (Optional)</Label>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <Label className="text-xs text-gray-600 mb-1 block">Warehouse</Label>
+                        <Input
+                          placeholder="All warehouses"
+                          value={schedule.filters?.warehouse || ''}
+                          onChange={(e) => handleUpdateFilter(schedule.id, 'warehouse', e.target.value || undefined)}
+                          className="border-gray-300 bg-white text-sm"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-600 mb-1 block">Sellable</Label>
+                        <Select
+                          value={schedule.filters?.sellable || 'all'}
+                          onValueChange={(value) => handleUpdateFilter(schedule.id, 'sellable', value)}
+                        >
+                          <SelectTrigger className="border-gray-300 bg-white text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All</SelectItem>
+                            <SelectItem value="sellable">Sellable Only</SelectItem>
+                            <SelectItem value="non-sellable">Non-Sellable Only</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-600 mb-1 block">Pickable</Label>
+                        <Select
+                          value={schedule.filters?.pickable || 'all'}
+                          onValueChange={(value) => handleUpdateFilter(schedule.id, 'pickable', value)}
+                        >
+                          <SelectTrigger className="border-gray-300 bg-white text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All</SelectItem>
+                            <SelectItem value="pickable">Pickable Only</SelectItem>
+                            <SelectItem value="non-pickable">Non-Pickable Only</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      <div>
+                        <Label className="text-xs text-gray-600 mb-1 block">SKU Filter</Label>
+                        <Input
+                          placeholder="Filter by SKU"
+                          value={schedule.filters?.sku || ''}
+                          onChange={(e) => handleUpdateFilter(schedule.id, 'sku', e.target.value || undefined)}
+                          className="border-gray-300 bg-white text-sm"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-600 mb-1 block">Location Filter</Label>
+                        <Input
+                          placeholder="Filter by location"
+                          value={schedule.filters?.location || ''}
+                          onChange={(e) => handleUpdateFilter(schedule.id, 'location', e.target.value || undefined)}
+                          className="border-gray-300 bg-white text-sm"
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   {/* Schedule Summary and Test Button */}
