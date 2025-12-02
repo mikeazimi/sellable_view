@@ -74,21 +74,29 @@ export async function POST(request: NextRequest) {
 
     console.log(`💾 [SCHEDULES] Saving ${schedules.length} schedules to Supabase...`)
 
-    const records = schedules.map(schedule => ({
-      id: schedule.id?.startsWith('temp_') ? undefined : schedule.id, // Don't save temp IDs
-      name: schedule.name || `Schedule at ${schedule.time}`,
-      customer_account_id: schedule.customer_account_id,
-      email: schedule.email,
-      days: schedule.days || [],
-      time: schedule.time,
-      enabled: schedule.enabled !== false,
-      filter_warehouse: schedule.filters?.warehouse || null,
-      filter_sellable: schedule.filters?.sellable || 'all',
-      filter_pickable: schedule.filters?.pickable || 'all',
-      filter_sku: schedule.filters?.sku || null,
-      filter_location: schedule.filters?.location || null,
-      updated_at: new Date().toISOString()
-    }))
+    const records = schedules.map(schedule => {
+      const record: any = {
+        name: schedule.name || `Schedule at ${schedule.time}`,
+        customer_account_id: schedule.customer_account_id,
+        email: schedule.email,
+        days: schedule.days || [],
+        time: schedule.time,
+        enabled: schedule.enabled !== false,
+        filter_warehouse: schedule.filters?.warehouse || null,
+        filter_sellable: schedule.filters?.sellable || 'all',
+        filter_pickable: schedule.filters?.pickable || 'all',
+        filter_sku: schedule.filters?.sku || null,
+        filter_location: schedule.filters?.location || null,
+        updated_at: new Date().toISOString()
+      }
+      
+      // Only include id if it's not a temp ID (let Supabase generate UUID for new schedules)
+      if (schedule.id && !schedule.id.startsWith('temp_')) {
+        record.id = schedule.id
+      }
+      
+      return record
+    })
 
     // Delete all existing schedules for this account and insert new ones
     const customerAccountId = schedules[0]?.customer_account_id
