@@ -53,7 +53,7 @@ export function SidebarLayout({ children }: SidebarLayoutProps) {
   const pathname = usePathname()
 
   return (
-    <div className="flex h-screen bg-white dark:bg-gray-900">
+    <div className="flex h-screen bg-gray-50">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div 
@@ -64,17 +64,17 @@ export function SidebarLayout({ children }: SidebarLayoutProps) {
 
       {/* Sidebar */}
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-gray-800 shadow-xl transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0",
+        "fixed inset-y-0 left-0 z-50 w-72 bg-white shadow-lg border-r border-gray-200 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0",
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         {/* Sidebar Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <Package className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
+              <h1 className="text-lg font-semibold text-gray-900">
                 Inventory View
               </h1>
             </div>
@@ -104,24 +104,27 @@ export function SidebarLayout({ children }: SidebarLayoutProps) {
                   className={cn(
                     "group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors",
                     isActive
-                      ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-200"
-                      : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      ? "bg-blue-50 text-blue-700 border border-blue-200"
+                      : "text-gray-700 hover:bg-gray-100"
                   )}
                 >
                   <Icon className={cn(
                     "w-5 h-5 mr-3 flex-shrink-0",
                     isActive
-                      ? "text-blue-700 dark:text-blue-200"
-                      : "text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300"
+                      ? "text-blue-600"
+                      : "text-gray-400 group-hover:text-gray-600"
                   )} />
                   <div className="flex-1">
                     <div className="font-medium">{item.name}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    <div className={cn(
+                      "text-xs mt-0.5",
+                      isActive ? "text-blue-600" : "text-gray-500"
+                    )}>
                       {item.description}
                     </div>
                   </div>
                   {isActive && (
-                    <ChevronRight className="w-4 h-4 text-blue-700 dark:text-blue-200" />
+                    <ChevronRight className="w-4 h-4 text-blue-600" />
                   )}
                 </Link>
               )
@@ -134,7 +137,7 @@ export function SidebarLayout({ children }: SidebarLayoutProps) {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile header */}
-        <div className="lg:hidden flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="lg:hidden flex items-center justify-between p-4 border-b border-gray-200 bg-white">
           <Button
             variant="ghost"
             size="sm"
@@ -142,12 +145,12 @@ export function SidebarLayout({ children }: SidebarLayoutProps) {
           >
             <Menu className="w-5 h-5" />
           </Button>
-          <h1 className="text-lg font-semibold">Sellable View</h1>
+          <h1 className="text-lg font-semibold text-gray-900">Sellable View</h1>
           <div className="w-10" />
         </div>
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto bg-white dark:bg-gray-900">
+        <main className="flex-1 overflow-auto bg-gray-50">
           {children}
         </main>
       </div>
