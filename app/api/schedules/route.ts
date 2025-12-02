@@ -63,6 +63,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { schedules } = body
 
+    console.log('📥 [SCHEDULES] Received request:', JSON.stringify(body, null, 2))
+
     if (!schedules || !Array.isArray(schedules)) {
       return NextResponse.json(
         { success: false, error: 'schedules array required' },
@@ -115,8 +117,13 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error('❌ [SCHEDULES] Error saving:', error)
+    console.error('❌ [SCHEDULES] Error details:', error.message, error.code, error.details)
     return NextResponse.json(
-      { success: false, error: error.message },
+      { 
+        success: false, 
+        error: error.message || 'Failed to save schedules',
+        details: error.details || error.hint || null
+      },
       { status: 500 }
     )
   }
