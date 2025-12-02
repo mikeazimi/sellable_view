@@ -433,16 +433,18 @@ export default function SchedulesPage() {
                             size="sm"
                             onClick={() => saveSchedule(schedule)}
                             disabled={saving}
+                            className="bg-blue-600 text-white hover:bg-blue-700"
                           >
                             <Save className="w-4 h-4 mr-1" />
-                            Save
+                            Save Changes
                           </Button>
                           <Button
                             size="sm"
-                            variant="ghost"
+                            variant="outline"
                             onClick={() => toggleEdit(schedule.id)}
                           >
-                            <X className="w-4 h-4" />
+                            <X className="w-4 h-4 mr-1" />
+                            Cancel
                           </Button>
                         </>
                       ) : (
@@ -452,34 +454,49 @@ export default function SchedulesPage() {
                             variant="outline"
                             onClick={() => toggleEnabled(schedule)}
                             disabled={saving}
+                            title={schedule.enabled ? "Disable schedule" : "Enable schedule"}
                           >
                             {schedule.enabled ? (
-                              <PowerOff className="w-4 h-4" />
+                              <>
+                                <PowerOff className="w-4 h-4 mr-1" />
+                                <span className="hidden sm:inline">Disable</span>
+                              </>
                             ) : (
-                              <Power className="w-4 h-4" />
+                              <>
+                                <Power className="w-4 h-4 mr-1" />
+                                <span className="hidden sm:inline">Enable</span>
+                              </>
                             )}
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => runNow(schedule)}
+                            title="Run this schedule now"
+                            className="bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
                           >
-                            <Play className="w-4 h-4" />
+                            <Play className="w-4 h-4 mr-1" />
+                            <span className="hidden sm:inline">Run Now</span>
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => toggleEdit(schedule.id)}
+                            title="Edit schedule"
                           >
-                            <Edit2 className="w-4 h-4" />
+                            <Edit2 className="w-4 h-4 mr-1" />
+                            <span className="hidden sm:inline">Edit</span>
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => deleteSchedule(schedule.id)}
                             disabled={saving}
+                            title="Delete schedule"
+                            className="text-red-600 hover:bg-red-50 hover:text-red-700"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            <span className="hidden sm:inline">Delete</span>
                           </Button>
                         </>
                       )}
@@ -665,10 +682,10 @@ export default function SchedulesPage() {
                   {/* Metadata */}
                   <div className="pt-3 border-t border-gray-200 flex items-center justify-between text-xs text-gray-500">
                     <div>
-                      Created: {new Date(schedule.created_at).toLocaleDateString()}
+                      Created: {schedule.created_at ? new Date(schedule.created_at).toLocaleDateString() : 'N/A'}
                     </div>
                     <div>
-                      Last updated: {new Date(schedule.updated_at).toLocaleString()}
+                      Last updated: {schedule.updated_at ? new Date(schedule.updated_at).toLocaleString() : 'N/A'}
                     </div>
                   </div>
                 </CardContent>

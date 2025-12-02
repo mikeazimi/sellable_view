@@ -26,28 +26,28 @@ const navigation = [
     description: 'View inventory data'
   },
   {
-    name: 'Scheduled Jobs',
-    href: '/schedules',
-    icon: Calendar,
-    description: 'Manage all scheduled reports'
-  },
-  {
     name: 'Settings',
     href: '/settings',
     icon: Settings,
     description: 'Scheduler & accounts'
   },
   {
-    name: 'Token Access',
-    href: '/token-access',
-    icon: Key,
-    description: 'API authentication'
+    name: 'Scheduled Jobs',
+    href: '/schedules',
+    icon: Calendar,
+    description: 'Manage all scheduled reports'
   },
   {
     name: 'Inventory Snapshot',
     href: '/snapshot-test',
     icon: Camera,
     description: 'Generate inventory snapshots'
+  },
+  {
+    name: 'Token Access',
+    href: '/token-access',
+    icon: Key,
+    description: 'API authentication'
   }
 ]
 
