@@ -13,7 +13,8 @@ import {
   ChevronRight,
   Key,
   Camera,
-  Database
+  Database,
+  Calendar
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -25,10 +26,10 @@ const navigation = [
     description: 'View inventory data'
   },
   {
-    name: 'Inventory Snapshot',
-    href: '/snapshot-test',
-    icon: Camera,
-    description: 'Generate inventory snapshots'
+    name: 'Scheduled Jobs',
+    href: '/schedules',
+    icon: Calendar,
+    description: 'Manage all scheduled reports'
   },
   {
     name: 'Settings',
@@ -41,6 +42,12 @@ const navigation = [
     href: '/token-access',
     icon: Key,
     description: 'API authentication'
+  },
+  {
+    name: 'Inventory Snapshot',
+    href: '/snapshot-test',
+    icon: Camera,
+    description: 'Generate inventory snapshots'
   }
 ]
 
