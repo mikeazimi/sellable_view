@@ -25,22 +25,10 @@ const navigation = [
     description: 'View inventory data'
   },
   {
-    name: 'Snapshot',
-    href: '/snapshot',
-    icon: Camera,
-    description: 'Manage inventory snapshots'
-  },
-  {
-    name: 'Snapshot Test',
+    name: 'Inventory Snapshot',
     href: '/snapshot-test',
     icon: Camera,
-    description: '🧪 Test snapshot workflow'
-  },
-  {
-    name: 'Seed Data',
-    href: '/seed-data',
-    icon: Database,
-    description: 'Upload CSV data'
+    description: 'Generate inventory snapshots'
   },
   {
     name: 'Settings',
@@ -65,7 +53,7 @@ export function SidebarLayout({ children }: SidebarLayoutProps) {
   const pathname = usePathname()
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-white dark:bg-gray-900">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div 
@@ -159,7 +147,7 @@ export function SidebarLayout({ children }: SidebarLayoutProps) {
         </div>
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-900">
+        <main className="flex-1 overflow-auto bg-white dark:bg-gray-900">
           {children}
         </main>
       </div>

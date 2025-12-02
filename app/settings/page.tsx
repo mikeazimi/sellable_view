@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Clock, Calendar, Plus, Trash2, Save } from 'lucide-react'
+import { Clock, Calendar, Plus, Trash2, Save, Play } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
 interface ScheduleItem {
@@ -13,6 +13,7 @@ interface ScheduleItem {
   days: string[]
   time: string
   enabled: boolean
+  email: string
 }
 
 interface AccountId {
@@ -65,7 +66,8 @@ export default function SettingsPage() {
       id: Date.now().toString(),
       days: [],
       time: '09:00',
-      enabled: true
+      enabled: true,
+      email: ''
     }
     setSchedules([...schedules, newSchedule])
   }
@@ -89,6 +91,12 @@ export default function SettingsPage() {
   const handleUpdateTime = (scheduleId: string, time: string) => {
     setSchedules(schedules.map(s => 
       s.id === scheduleId ? { ...s, time } : s
+    ))
+  }
+
+  const handleUpdateEmail = (scheduleId: string, email: string) => {
+    setSchedules(schedules.map(s => 
+      s.id === scheduleId ? { ...s, email } : s
     ))
   }
 
@@ -130,6 +138,72 @@ export default function SettingsPage() {
       title: 'Account removed',
       description: 'Account ID has been removed',
     })
+  }
+
+  const handleRunNow = async (schedule: ScheduleItem) => {
+    if (!schedule.email) {
+      toast({
+        title: 'Error',
+        description: 'Please add an email address to this schedule',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (schedule.days.length === 0) {
+      toast({
+        title: 'Error',
+        description: 'Please select at least one day for this schedule',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    toast({
+      title: 'Starting inventory query...',
+      description: 'This may take several minutes. The report will be emailed when complete.',
+    })
+
+    try {
+      // Get the first account ID (or allow selection in future)
+      const customerAccountId = accountIds[0]?.value || '88774'
+      
+      // Get auth token
+      const token = localStorage.getItem('shiphero_access_token')
+      if (!token) {
+        throw new Error('Not authenticated. Please login first.')
+      }
+
+      const response = await fetch('/api/scheduler/run-inventory', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          customerAccountId,
+          email: schedule.email,
+          scheduleName: `Manual Run - ${schedule.time} ${schedule.days.join(', ')}`
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Scheduler failed')
+      }
+
+      const result = await response.json()
+      
+      toast({
+        title: 'Success!',
+        description: `Report sent to ${schedule.email}. ${result.itemsProcessed} items processed.`,
+      })
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to run scheduler',
+        variant: 'destructive',
+      })
+    }
   }
 
   return (
@@ -270,7 +344,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  {/* Time */}
+                  {/* Time and Email */}
                   <div className="flex items-center gap-3">
                     <div className="flex-1">
                       <Label className="text-sm mb-2 block">Time</Label>
@@ -278,6 +352,15 @@ export default function SettingsPage() {
                         type="time"
                         value={schedule.time}
                         onChange={(e) => handleUpdateTime(schedule.id, e.target.value)}
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <Label className="text-sm mb-2 block">Email Address</Label>
+                      <Input
+                        type="email"
+                        placeholder="report@example.com"
+                        value={schedule.email}
+                        onChange={(e) => handleUpdateEmail(schedule.id, e.target.value)}
                       />
                     </div>
                     <Button
@@ -290,12 +373,25 @@ export default function SettingsPage() {
                     </Button>
                   </div>
 
-                  {/* Schedule Summary */}
-                  {schedule.days.length > 0 && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Runs every {schedule.days.join(', ')} at {schedule.time}
-                    </p>
-                  )}
+                  {/* Schedule Summary and Test Button */}
+                  <div className="flex items-center justify-between">
+                    {schedule.days.length > 0 && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Runs every {schedule.days.join(', ')} at {schedule.time}
+                        {schedule.email && ` • Report sent to ${schedule.email}`}
+                      </p>
+                    )}
+                    {schedule.email && schedule.days.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleRunNow(schedule)}
+                      >
+                        <Play className="w-3 h-3 mr-1" />
+                        Run Now
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -314,8 +410,7 @@ export default function SettingsPage() {
           {/* Info */}
           <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
             <p className="text-sm text-blue-800 dark:text-blue-200">
-              <strong>Note:</strong> Scheduled refreshes will query ShipHero and update Supabase automatically.
-              The inventory page will always show the latest cached data.
+              <strong>Note:</strong> Scheduled refreshes will query ShipHero, update Supabase, and email a CSV + PDF report to the specified email address.
             </p>
           </div>
         </CardContent>
